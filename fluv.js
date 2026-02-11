@@ -743,6 +743,7 @@ const pathMorpherIns = new PathMorpher();
         // Options
         this.config = {
             duration: options.duration || null, // Manual override for maxDuration
+            speed : options.speed || 1,
             easing: options.easing || 'linear',
             loop: options.loop || false,
             autoplay: options.autoplay !== undefined ? options.autoplay : false,
@@ -995,29 +996,29 @@ const pathMorpherIns = new PathMorpher();
     }
 
     _compileTimeline() {
-        const tweens = [];
-        let calcMax = 0;
-        for (let i = 0; i < this.animations.length; i++) {
-            const animatables = this.animations[i].animatables;
-            for (const prop in animatables) {
-                const stepTweens = animatables[prop];
-                for (let k = 0; k < stepTweens.length; k++) {
-                    const tw = stepTweens[k];
-                    tweens.push(tw);
-                    calcMax = Math.max(calcMax, tw.delay + tw.duration);
-                }
-            }
-        }
-        this._allTweens = tweens;
-        this.maxDuration = this.config.duration || calcMax;
+      const tweens = [];
+      let calcMax = 0;
+      for (let i = 0; i < this.animations.length; i++) {
+          const animatables = this.animations[i].animatables;
+          for (const prop in animatables) {
+              const stepTweens = animatables[prop];
+              for (let k = 0; k < stepTweens.length; k++) {
+                  const tw = stepTweens[k];
+                  tweens.push(tw);
+                  calcMax = Math.max(calcMax, tw.delay + tw.duration);
+              }
+          }
+      }
+      this._allTweens = tweens;
+      this.maxDuration = this.config.duration || calcMax;
     }
     
     _hasElementPropertiesAnimations(el, props) {
 
-        const thisAnimationItem = this.animations.find(a=>a.el.id() == el.id())
-        const thisAnimatables = thisAnimationItem.animatables;
+      const thisAnimationItem = this.animations.find(a=>a.el.id() == el.id())
+      const thisAnimatables = thisAnimationItem.animatables;
 
-        return props.some(prop => prop in thisAnimatables);
+      return props.some(prop => prop in thisAnimatables);
     }
 
     _render(elapsed) {
@@ -1041,7 +1042,8 @@ const pathMorpherIns = new PathMorpher();
             const localP = Math.max(0, Math.min(1, (elapsed - tween.delay) / (tween.duration || 1)));
             
             // Optimization: skip runner calculation if elapsed hasn't reached delay
-            if (elapsed < tween.delay && localP === 0) continue;
+            if(this.isPlaying)
+              if (elapsed < tween.delay && localP === 0) continue;
             
             var val;
             var prop = tween.prop;
@@ -1248,11 +1250,12 @@ const pathMorpherIns = new PathMorpher();
         this.dirtyProperties.clear()
     }
 
-    _fullReset() {
+    _fullReset(percent = 0) {
         this.fullReset = true;
-        this.seek(0)
+        this.seek(percent)
         this.fullReset = false;
     }
+
 
     play(direction = 1, restart = false, reversing = false) {
         this.pause();
@@ -1274,7 +1277,11 @@ const pathMorpherIns = new PathMorpher();
             const tick = (now) => {
                 if (!startTime) startTime = now;
                 const delta = now - startTime;
-                let elapsed = direction === 1 ? initialElapsed + delta : initialElapsed - delta;
+                // SPEED MANAGEMENT: 
+                // Calculate how much % progress to add based on speed and time delta
+                const progressDelta = delta * this.config.speed;
+                
+                let elapsed = direction === 1 ? initialElapsed + progressDelta : initialElapsed - progressDelta;
 
                 // Boundary Logic
                 if (elapsed > this.maxDuration || elapsed < 0) {
@@ -1289,6 +1296,10 @@ const pathMorpherIns = new PathMorpher();
                         if (this.config.onComplete) this.config.onComplete();
                         this.pause();
                         if(this.lastElapsed == this.maxDuration) this.isCompleted = true;
+
+                        if(reversing && this.lastElapsed == 0)
+                          this._fullReset() // to enforce staggered element to return to their initial values
+
                         return;
                     }
                 }
@@ -1312,20 +1323,20 @@ const pathMorpherIns = new PathMorpher();
     }
 
     pause() {
-        this.isPlaying = false;
-        if (this.rafId) cancelAnimationFrame(this.rafId);
+      this.isPlaying = false;
+      if (this.rafId) cancelAnimationFrame(this.rafId);
     }
 
     reverse() {
-        this.play(-1, false, true);
+      this.play(-1, false, true);
     }
 
     seek(percent) {
-        this.pause();
-        this._cleanDirtyProperties();
-        this.progress = percent;
-        this.lastElapsed = (percent / 100) * this.maxDuration;
-        this._render(this.lastElapsed);
+      this.pause();
+      this._cleanDirtyProperties();
+      this.progress = percent;
+      this.lastElapsed = (percent / 100) * this.maxDuration;
+      this._render(this.lastElapsed);
     }
 
     time(time)
@@ -1336,49 +1347,49 @@ const pathMorpherIns = new PathMorpher();
 
     remove(targets) {
         
-        /** Get initial value and reset to it */
-        const itemsToRemove = this.animations.filter(a=>a.targets == targets);
-        itemsToRemove.forEach(item => {
-            item.el.transform(item._snapshot.transform())
-            item.el.attr(item._snapshot.attr())
-        });
+      /** Get initial value and reset to it */
+      const itemsToRemove = this.animations.filter(a=>a.targets == targets);
+      itemsToRemove.forEach(item => {
+          item.el.transform(item._snapshot.transform())
+          item.el.attr(item._snapshot.attr())
+      });
 
-        /** Remove definitively animations and re-compile the timeline */
-        this.animations = this.animations.filter(a=>a.targets != targets)
-        this._compileTimeline()
+      /** Remove definitively animations and re-compile the timeline */
+      this.animations = this.animations.filter(a=>a.targets != targets)
+      this._compileTimeline()
     }
 
     _getInitialState(el, prop) {
       
-        if(!this.config.managedState)
-        {
-          if (Fluv.VALID_TRANSFORMS.includes(prop)) return new SVG.Matrix(el);
-          if (Object.keys(Fluv.COLOR_ATTRIBUTES).includes(prop)) return el.attr(prop) || "#000";
-          if (prop == Fluv.PATH_TRANSFORMS.followPath) return 0;
-          if (Object.keys(Fluv.PATH_TRANSFORMS).includes(prop)) return el.attr("d")
-          if(Object.keys(Fluv.EFFECTS_PROPERTIES).includes(prop)) return null; // effect/filters
-  
-          return el.attr(prop) || 0;
-        }
-        else // managed state
-        {
-          return this.config.getManagedState(el, prop)
-        }
+      if(!this.config.managedState)
+      {
+        if (Fluv.VALID_TRANSFORMS.includes(prop)) return new SVG.Matrix(el);
+        if (Object.keys(Fluv.COLOR_ATTRIBUTES).includes(prop)) return el.attr(prop) || "#000";
+        if (prop == Fluv.PATH_TRANSFORMS.followPath) return 0;
+        if (Object.keys(Fluv.PATH_TRANSFORMS).includes(prop)) return el.attr("d")
+        if(Object.keys(Fluv.EFFECTS_PROPERTIES).includes(prop)) return null; // effect/filters
+
+        return el.attr(prop) || 0;
+      }
+      else // managed state
+      {
+        return this.config.getManagedState(el, prop)
+      }
           
     }
 
     _reorderKeys(obj) {
-        const result = {};
-        Fluv.ANIMATBLES_ORDER.forEach(key => { if (key in obj) result[key] = obj[key]; });
-        Object.keys(obj).forEach(key => { if (!(key in result)) result[key] = obj[key]; });
-        return result;
+      const result = {};
+      Fluv.ANIMATBLES_ORDER.forEach(key => { if (key in obj) result[key] = obj[key]; });
+      Object.keys(obj).forEach(key => { if (!(key in result)) result[key] = obj[key]; });
+      return result;
     }
 
     _calculateStagger(delayArr, totalElements, index) {
-        let [s, r, g] = delayArr;
-        if (typeof s === "string" && s.includes("%")) s = (totalElements * parseInt(s)) / 100;
-        if (typeof r === "string" && r.includes("%")) r = (totalElements * parseInt(r)) / 100;
-        return index < s ? 0 : Math.floor((index - s) / r) * g;
+      let [s, r, g] = delayArr;
+      if (typeof s === "string" && s.includes("%")) s = (totalElements * parseInt(s)) / 100;
+      if (typeof r === "string" && r.includes("%")) r = (totalElements * parseInt(r)) / 100;
+      return index < s ? 0 : Math.floor((index - s) / r) * g;
     }
 }
 

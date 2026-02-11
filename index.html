@@ -286,7 +286,7 @@
             ],
             fill: [
                 { value: '#10b981', duration: 1 },
-                { value: '#ef6', duration: 600, delay: [0, 2 ,100] },
+                { value: '#ef6', duration: 600, delay: [0, 1 ,100] },
             ],
         };
 
@@ -315,7 +315,7 @@
         // INITIALIZATOR
 
         // 1. Initialize
-        const fl = new Fluv({});
+        const fl = new Fluv({speed : 1});
         fl.add(nodeAnimations)
         // fl.add(textAnimations)
         fl.add(staggerElsNodeAnimations)
@@ -330,7 +330,7 @@
             if (seeker)
                 seeker.value = fl.progress;
             if (status)
-                status.innerText = `Time: ${Math.round(fl.maxDuration*fl.progress)}ms / ${fl.maxDuration}ms`;
+                status.innerText = `Time: ${Math.round(fl.maxDuration*fl.progress/100)}ms / ${fl.maxDuration}ms`;
         }
 
         function complete()
@@ -365,7 +365,7 @@
         // Seeker timeline
         if (seeker) {
             seeker.addEventListener("input", (e) =>
-                fl.seek(e.target.value),
+                fl.seek(parseInt(e.target.value)),
             );
         }
 
