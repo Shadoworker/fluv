@@ -1039,18 +1039,25 @@ const pathMorpherIns = new PathMorpher();
                 tween.delay = tween.delayTemp;
             }
             /********************************* */
-            const localP = Math.max(0, Math.min(1, (elapsed - tween.delay) / (tween.duration || 1)));
+            const localProgress = Math.max(0, Math.min(1, (elapsed - tween.delay) / (tween.duration || 1)));
             
-            // Optimization: skip runner calculation if elapsed hasn't reached delay
-            if(this.isPlaying)
-              if (elapsed < tween.delay && localP === 0) continue;
+            /** * PERFORMANCE GATE: 
+             * We skip the heavy runner calculation if the playhead hasn't reached the tween's delay yet.
+             * EXCEPTION: If we are seeking (!isPlaying), we MUST process staggered elements 
+             * even before their delay to ensure their initial state is rendered correctly.
+             */
+            const isPreDelay = elapsed < tween.delay && localProgress === 0;
+            const shouldSkip = this.isPlaying ? isPreDelay : (isPreDelay && !tween.runner.staggered);
+
+            if (shouldSkip) continue;
             
+            /************************************************** */
+           
             var val;
             var prop = tween.prop;
-
             
             if (!Object.keys(Fluv.PATH_TRANSFORMS).includes(prop) || prop == Fluv.PATH_TRANSFORMS.followPath) // Dont get value from runner directly for these types
-                val = tween.runner.at(localP);
+                val = tween.runner.at(localProgress);
 
             if (Fluv.VALID_TRANSFORMS.includes(prop)) 
             {
@@ -1087,7 +1094,7 @@ const pathMorpherIns = new PathMorpher();
             }
             else if(prop == Fluv.PATH_TRANSFORMS.morphTo || prop == Fluv.PATH_TRANSFORMS.d)
             {
-                const morph = tween.runner.interpolator(localP);
+                const morph = tween.runner.interpolator(localProgress);
                 // Set attribute value
                 tween.el.attr({ 'd': morph });
             }
