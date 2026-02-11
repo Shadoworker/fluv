@@ -1,7 +1,7 @@
 
 # 🌊 Fluv.js
 
-**High‑Performance, Matrix‑Driven Animation Engine for SVG.js**
+**High‑Performance, Animation Engine for SVG.js**
 
 [Fluv] (like the French word **"Fleuve"** /flœv/, meaning *river*)
 
@@ -186,8 +186,8 @@ const tl = new Fluv({
 | Transform | translateX, translateY, rotate, scale |
 | Geometry | width, height, rx, ry |
 | Appearance | fill, stroke, opacity |
-| Paths | morphTo |
-| Filters | blur, brightness |
+| Paths | morphTo, followPath, d |
+| Filters | (blur, brightness, ...) |
 
 ---
 
@@ -196,7 +196,7 @@ const tl = new Fluv({
 ```js
 timeline.add({
   targets: ".items",
-  delay: Fluv.stagger(100),
+  delay: [0, 1, 100], // [start, length, delay]
   translateY: [{ value: 50, duration: 500 }]
 });
 ```
@@ -230,11 +230,11 @@ Fluv minimizes layout and paint cost by:
 
 Planned features:
 - Keyframe editor
-- DevTools timeline panel
 - Physics-based easing
-- GPU acceleration experiments
 
 ---
+
+Feel free to improve/extend it !
 
 # 📄 License
 
