@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FLUV Test</title>
+    <script src="../../svg.js"></script>
+    <script src="../../svg.filter.js"></script>
+    <script src="./fluv.js"></script>
+    <style>
+        body {
+            background: #1a1a1a;
+            color: white;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        #canvas {
+            background: #b9b9b9;
+            border: 2px solid #444;
+            margin: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background: #2a2a2a;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #444;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 24px;
+            cursor: pointer;
+            background: #444;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #555;
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        .btn-primary {
+            background: #f06;
+        }
+
+        .btn-primary:hover {
+            background: #ff2e8c;
+        }
+
+        input[type="range"] {
+            width: 450px;
+            accent-color: #f06;
+            cursor: pointer;
+        }
+
+        .info {
+            font-size: 0.8rem;
+            color: #888;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <h3>FLUV JS</h3>
+    <div id="canvas"></div>
+
+    <div class="controls">
+        <div class="btn-group">
+            <button class="btn-primary" onclick="fl.play(1)">
+                PLAY
+            </button>
+            <button class="btn-primary" onclick="fl.reverse()">REVERSE</button>
+            <button onclick="fl.pause()">PAUSE</button>
+        </div>
+        <input type="range" id="seeker" min="0" max="100" step="0.01" value="0" />
+        <div class="info" id="status">Time: 0ms / 0ms</div>
+    </div>
+
+    <script>
+      
+
+        // --- APPLICATION START ---
+
+        // 1. Setup Scene
+
+        /*******************RECT*********************/
+        const draw = SVG().addTo("#canvas").size(500, 350);
+        const rect = draw.rect(60, 60)
+        .id("svg-el1")
+        .fill("#f06")
+        .stroke({color : "#000", width : 0})
+        .translate(50, 145)
+        .radius(4)
+
+        const rectAnchorRadius = 6
+        const rectAnchor = draw.circle(rectAnchorRadius).id('anchor').fill('#ff8fbc')
+        .translate(80, 175)
+
+        // effect-1
+        // rect.filterWith(function(add) {
+        //     add.id('effect-1')
+        //     add.gaussianBlur(30)
+        // })
+
+        // effect-2
+        // rect.filterWith(function(add) {
+        //     add.id('effect-2')
+        //     add.colorMatrix('matrix', 
+        //     [ 0, 0,   0,   1,   0
+        //     , 0, 0,   0,   0.2,   0
+        //     , 0, 0,   0,   0.2,   0
+        //     , 0, 0,   0,   1,   0 ])
+        // })
+
+        /******************TEXT********************/
+        var text = draw.text(function(add) {
+            add.tspan('H')
+            add.tspan('E')
+            add.tspan('L')
+            add.tspan('L')
+            add.tspan('O')
+        })
+        .id("text")
+        .translate(220, 50)
+
+        /*******************PATH*********************/
+        // const diamondPath = "M40 0 L80 40 L40 80 L0 40 Z";
+        const squarePath = "M0 0 C0 0 80 0 80 0 C80 0 80 80 80 80 C80 80 0 80 0 80 C0 80 0 0 0 0 Z";
+        const kitePath = "M40 0 C40 0 90 90 90 90 C90 90 45 60 45 60 C45 60 0 90 0 90 C0 90 40 0 40 0 Z";
+        const wavyPath = "M 50 150 C 150 50 250 250 350 150";
+        const shape = draw.path(wavyPath)
+        .id('shape')
+        // .fill("#3162b3")
+        .fill("none")
+        .stroke({color : '#000', width : 2})
+        .translate(100, 50); // Center it in the canvas
+
+
+        // const kit = draw.path(kitePath)
+        // .id('kit')
+        // .fill("#62b331")
+        // .translate(350, 50); // Center it in the canvas
+
+
+        /*******************MULTIPLE RECTS*********************/
+        const count = 10;
+        const radius = 20;
+        const spacing = 40;
+        const startX = 50;
+        const centerY = 100;
+
+        for (let i = 0; i < count; i++) {
+            const c = draw
+            .rect(radius, radius)
+            .translate(startX + i * spacing, centerY)
+            .fill("#10b981")
+            .rotate(45)
+            .addClass("stagger-el"); // Add the class for your TimelineEx to find
+        }
+
+        // 2. Build Animations
+
+        const nodeAnimations = {
+            targets: "#svg-el1",
+            translateX: [
+                { value: 50, duration: 1, delay: 0 },
+                { value: 150, duration: 1000, delay: 0, easing: '-' },
+                { value: 340, duration: 1000, delay: 1000, easing: "-" },
+            ],
+            rotate: [
+                // { value: 45, duration: 1, delay: 0 },
+                { value: 90, duration: 1000, delay: 0, easing: "-" },
+            ],
+            anchor: [
+                { value: [0.5, 0.5], duration: 500, delay: 0, easing: "-" },
+            ],
+            
+            scaleX : [
+                { value: 1.5, duration: 1000, delay : 0 /* easing : 'easeOutElastic' */ },
+            ],
+            // fill: [
+            //     // { value: "#ef6", duration: 500 },
+            //     // { value: "#00f", delay: 500, duration: 500 },
+            //     { value: "linear-gradient(90deg, rgba(125,0,102,1) 20%, rgba(0,255,153,1) 100%)", delay: 0, duration: 1000 },
+
+            // ],
+            // // width : [
+            // //     { value: 400, duration: 1000 },
+            // // ],
+            
+            // stroke: [
+            //     // { value: "#09e", duration: 500 },
+            //     // { value: "#00f", delay: 500, duration: 500 },
+            //     { value: "linear-gradient(90deg, rgba(255,200,10,1) 20%, rgba(0,255,253,1) 100%)", delay: 0, duration: 1000 },
+            // ],
+            // strokeWidth : [
+            //     { value: 0, duration: 1 },
+            //     { value: 4, duration: 500 },
+            // ],
+            // strokeDashoffset : [
+            //     { value: 100, delay : 500, duration: 1000 },
+            // ],
+            // followPath : [
+            //     { value: "#shape", duration: 1000, easing : 'linear' },
+            // ],
+            // effectBlur : [
+            //     { value: "0 0", duration: 1000, 
+            //         params : {
+            //             effectSelector : "#effect-1",
+            //             filterSelector : "#effect-1 feGaussianBlur",
+            //             filterProperty : "stdDeviation"
+            //         } 
+            //     },
+            // ],
+
+            //  effectColor : [
+            //     { value: 
+            //         `0 0 0 0.2 0 
+            //         0 0 0  0.7 0 
+            //         0 0 0  0.1 0 
+            //         0 0 0  1 0`
+            //         , duration: 1000, 
+            //         params : {
+            //             effectSelector : "#effect-2",
+            //             filterSelector : "#effect-2 feColorMatrix",
+            //             filterProperty : "values"
+            //         } 
+            //     },
+            // ]
+
+             
+        };
+
+        const textAnimations = {
+            targets: "#text",
+            translateX: [
+                { value: 220, duration: 1, delay: 0 },
+                // { value: 300, duration: 1000, delay: 0, easing: '-' },
+                { value: 340, duration: 1000, delay: 0, easing: "-" },
+            ],
+            // fill: [
+            //     // { value: "#ef6", duration: 500 },
+            //     // { value: "#00f", delay: 500, duration: 500 },
+            // ],
+            width : [
+                { value: 15, duration: 1 },
+                { value: 25, duration: 1000 },
+            ],
+        }
+
+        const staggerElsNodeAnimations = {
+            targets: ".stagger-el",
+            translateY: [
+                // { value: 95.85, duration: 1, delay: [0, 1 ,100] },
+                { value: 125, duration: 1000, delay:  [0, 1 ,100], easing : 'easeOutCirc' },
+            ],
+            
+            rotate: [
+                { value: 0, duration: 1 },
+                { value: 90, duration: 600, delay : [0, 1 ,100] /* easing : 'easeOutElastic' */ },
+            ],
+            fill: [
+                { value: '#10b981', duration: 1 },
+                { value: '#ef6', duration: 600, delay: [0, 2 ,100] },
+            ],
+        };
+
+        const shapeAnimations = {
+            targets: '#shape',
+            d: [
+                { value: kitePath, duration: 1000, delay: 0 }
+            ],
+            // morphTo: [
+            //     // { value: squarePath, duration: 1, delay: 0 },
+            //     { value: "#kit", duration: 1000, delay: 0 }
+            // ],
+            // fill: [
+            //     { value: "#ef4444", duration: 1000 }, // Change color during morph
+            //     { value: "#3b82f6", duration: 1000 }
+            // ],
+            // translateX: [
+            //     // { value: 50, duration: 1, delay: 0 },
+            //     { value: 250, duration: 1000, delay: 0, easing: "-" },
+            // ],
+            // rotate: [
+            //     { value: 90, duration: 1000, delay: 0, easing: "-" },
+            // ],
+        }
+      
+        // INITIALIZATOR
+
+        // 1. Initialize
+        const fl = new Fluv({});
+        fl.add(nodeAnimations)
+        // fl.add(textAnimations)
+        fl.add(staggerElsNodeAnimations)
+        // fl.add(shapeAnimations)
+
+        // 2. UI
+        const seeker = document.querySelector("#seeker");
+        const status = document.querySelector("#status");
+
+        function update()
+        {
+            if (seeker)
+                seeker.value = fl.progress;
+            if (status)
+                status.innerText = `Time: ${Math.round(fl.maxDuration*fl.progress)}ms / ${fl.maxDuration}ms`;
+        }
+
+        function complete()
+        {
+            console.log(
+                "%c %c FLUV %c DONE %c ",
+                "background: #444; padding: 2px 0;",
+                "background: #f06; color: white; padding: 2px; font-weight: bold; border-radius: 4px 0 0 4px;",
+                "background: #2c2c2c; color: #f06; padding: 2px; font-weight: bold; border-radius: 0 4px 4px 0; border: 1px solid #f06;",
+                "background: #444; padding: 2px 0;"
+            );
+        }
+
+        function updateAnchor(el, anchor)
+        {
+            const ox = el.bbox().x + el.bbox().width * anchor[0]
+            const oy = el.bbox().y + el.bbox().height * anchor[1]
+
+            const tr = el.transform()
+
+
+            rectAnchor.transform({ translate : [
+                tr.translateX + ox - rectAnchorRadius/2,
+                tr.translateY + oy - rectAnchorRadius/2
+            ] }, false)
+        }
+
+        fl.config.onUpdate = update;
+        fl.config.onComplete = complete;
+        fl.config.updateAnchorCb = updateAnchor;
+
+        // Seeker timeline
+        if (seeker) {
+            seeker.addEventListener("input", (e) =>
+                fl.seek(e.target.value),
+            );
+        }
+
+    </script>
+</body>
+
+</html>
