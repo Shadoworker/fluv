@@ -8,9 +8,8 @@
 Fluv is a professional-grade animation engine designed to extend and stabilize SVG.js animations.  
 It replaces fire‑and‑forget runners with a **centralized timeline engine** and a **deterministic matrix compositor**, allowing precise control, reversibility, and seekable animation flows.
 
-
-
-https://github.com/user-attachments/assets/30556726-38a5-4e18-8a5e-241677a5c229
+# Demo
+https://github.com/user-attachments/assets/96dda844-8050-42aa-afc1-f86352e9f714
 
 
 ---
