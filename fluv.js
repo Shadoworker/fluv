@@ -789,7 +789,10 @@ const pathMorpherIns = new PathMorpher();
             const anchor = this.config.managedState ? [el.anchor()?.x, el.anchor()?.y] : [0.5, 0.5]; // get or set default anchor
             ghost._anchor = anchor; // save inside ghost
 
+            ghost._hasTranslateX = false; // marker to check if el has translateX keyframes or not
+            
             const item = { el, targets : data.targets, _ghost: ghost, _snapshot : snapshot, animatables: {} };
+
 
             for (const prop in data) {
                 if (prop === 'targets' || !data[prop]) continue;
@@ -824,6 +827,8 @@ const pathMorpherIns = new PathMorpher();
                           const dx = prop === "translateX" ? val : 0;
                           const dy = prop === "translateY" ? val : 0;
                           finalValue = startValue.clone().transform({ translate: [dx, dy] }, true);
+
+                          if(prop == "translateX") ghost._hasTranslateX = true
                       } 
                       else 
                       {
@@ -1066,10 +1071,22 @@ const pathMorpherIns = new PathMorpher();
                 const oy = tween._ghost.bbox().y + tween._ghost.bbox().height * tween._ghost._anchor[1]
                 //----------------------------------------------
 
-                if (prop === "translateX" || prop === "translateY") {
-                    tween.el.transform(val);
-                    tween._ghost.transform(val);
-                } 
+                if (prop === "translateX" || (prop === "translateY" && !tween._ghost._hasTranslateX)) 
+                {
+                  // computed for translateY only if there is no translateX animation for the element 
+                  tween.el.transform(val);
+                  tween._ghost.transform(val);
+                }
+                else if(prop === "translateY") // else : translateX exist, so we make translateY additive
+                {
+                  const ttY = val.decompose().translateY;
+                  let currentTY = tween._ghost.transform().translateY;
+                  
+                  tween._ghost.transform({translateY : ttY - currentTY}, true);
+
+                  tween.el.transform(tween._ghost.transform());
+                  
+                }
                 else if(prop === "anchor")
                 { 
                   tween._ghost._anchor = val; // save inside el's ghost
