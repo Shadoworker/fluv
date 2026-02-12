@@ -196,8 +196,7 @@ const tl = new Fluv({
 ```js
 timeline.add({
   targets: ".items",
-  delay: [0, 1, 100], // [start, length, delay]
-  translateY: [{ value: 50, duration: 500 }]
+  translateY: [{ value: 50, duration: 500, delay: [0, 1, 100], /* [start, length, delay]*/ }]
 });
 ```
 
