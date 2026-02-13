@@ -1,6 +1,7 @@
 // import SVG from './svg'
 // -----------------------------
 // Path Morphing
+
 // -----------------------------
 class PathMorpher {
   SVGNS = "http://www.w3.org/2000/svg";
@@ -780,6 +781,13 @@ const pathMorpherIns = new PathMorpher();
         const found = SVG.find(data.targets);
         const elements = Array.isArray(found) ? found : [found];
 
+        /** Two lines below will help structure correctly the transforms animation logic **/
+        // Check if translateX (the base starting of transform animation) exists
+        const hasTranslateX = this._objectContainsProperties(data, ["translateX"]);
+        // Then get full animation duration
+        const elementAnimationDuration = this._getElementAnimationDuration(data); 
+        /********************************************************************************** */
+
         elements.forEach((el, i) => {
             // Virtual ghost for matrix math (not added to DOM)
             const snapshot = el.clone(true); // initial unanimated state
@@ -789,12 +797,13 @@ const pathMorpherIns = new PathMorpher();
             const anchor = this.config.managedState ? [el.anchor()?.x, el.anchor()?.y] : [0.5, 0.5]; // get or set default anchor
             ghost._anchor = anchor; // save inside ghost
 
-            ghost._hasTranslateX = false; // marker to check if el has translateX keyframes or not
-            ghost._hasTranslateY = false; // marker to check if el has translateY keyframes or not
-            ghost._hasScaleX = false; 
-            ghost._hasScaleY = false;
-
-
+          
+            if(!hasTranslateX) // Create then a default (fixed) translateX (using element initial translateX)
+            {
+              data["translateX"] = [{value : snapshot.transform().translateX, duration : elementAnimationDuration}]
+              data = this._reorderKeys(data); // reorder
+            }
+  
             const item = { el, targets : data.targets, _ghost: ghost, _snapshot : snapshot, animatables: {} };
 
 
@@ -831,9 +840,6 @@ const pathMorpherIns = new PathMorpher();
                           const dx = prop === "translateX" ? val : 0;
                           const dy = prop === "translateY" ? val : 0;
                           finalValue = startValue.clone().transform({ translate: [dx, dy] }, true);
-
-                          if(prop == "translateX") ghost._hasTranslateX = true
-                          if(prop == "translateY") ghost._hasTranslateY = true
                       } 
                       else 
                       {
@@ -845,12 +851,7 @@ const pathMorpherIns = new PathMorpher();
                         else
                         {
                           if(prop == 'scaleX' || prop == 'scaleY')
-                          {
                             val = step.value / startValue.decompose()[prop];
-                            
-                            if(prop == "scaleX") ghost._hasScaleX = true
-                            if(prop == "scaleY") ghost._hasScaleY = true
-                          }
   
                           const tObj = { [prop]: val };
 
@@ -1027,13 +1028,38 @@ const pathMorpherIns = new PathMorpher();
       this._allTweens = tweens;
       this.maxDuration = this.config.duration || calcMax;
     }
+
+    _getElementAnimationDuration(data) {
+        let maxDuration = 0;
+        // 1. Iterate through each property (translateX, translateY, etc.)
+        for (const prop in data) 
+        {
+          if (prop === 'targets') continue; // Skip metadata
+          const keyframes = data[prop];
+          let currentPropTime = 0;
+          // 2. Sum up the sequence within this specific property
+          keyframes.forEach(kf => {
+              currentPropTime += (kf.duration || 0) + (kf.delay || 0);
+          });
+          // 3. Compare this property's end time to the global max
+          if (currentPropTime > maxDuration) {
+              maxDuration = currentPropTime;
+          }
+        }
+
+        return maxDuration;
+    }
     
-    _hasElementPropertiesAnimations(el, props) {
+    _objectContainsProperties(data, props) {
+      return props.some(prop => prop in data);
+    }
+
+    _elementAnimationsContainProperties(el, props) {
 
       const thisAnimationItem = this.animations.find(a=>a.el.id() == el.id())
       const thisAnimatables = thisAnimationItem.animatables;
 
-      return props.some(prop => prop in thisAnimatables);
+      return this._objectContainsProperties(thisAnimatables, props)
     }
 
     _render(elapsed) {
@@ -1070,7 +1096,6 @@ const pathMorpherIns = new PathMorpher();
            
             var val;
             var prop = tween.prop;
-            const ghost = tween._ghost;
             
             if (!Object.keys(Fluv.PATH_TRANSFORMS).includes(prop) || prop == Fluv.PATH_TRANSFORMS.followPath) // Dont get value from runner directly for these types
                 val = tween.runner.at(localProgress);
@@ -1078,60 +1103,45 @@ const pathMorpherIns = new PathMorpher();
             if (Fluv.VALID_TRANSFORMS.includes(prop)) 
             {
                 // process eventual anchor point for transforms
-                const ox = ghost.bbox().x + ghost.bbox().width * ghost._anchor[0]
-                const oy = ghost.bbox().y + ghost.bbox().height * ghost._anchor[1]
+                const ox = tween._ghost.bbox().x + tween._ghost.bbox().width * tween._ghost._anchor[0]
+                const oy = tween._ghost.bbox().y + tween._ghost.bbox().height * tween._ghost._anchor[1]
                 //----------------------------------------------
 
-                if (prop === "translateX" || (prop === "translateY" && !ghost._hasTranslateX)) 
+                if (prop === "translateX") 
                 {
-                  // computed for translateY only if there is no translateX animation for the element 
                   tween.el.transform(val);
-                  ghost.transform(val);
+                  tween._ghost.transform(val);
                 }
-                else if(prop === "translateY") // else : translateX exist, so we make translateY additive
+                else if(prop === "translateY") // we make translateY additive
                 {
                   const ttY = val.decompose().translateY;
-                  let currentTY = ghost.transform().translateY;
+                  let currentTY = tween._ghost.transform().translateY;
                   
-                  ghost.transform({translateY : ttY - currentTY}, true);
+                  tween._ghost.transform({translateY : ttY - currentTY}, true);
 
-                  tween.el.transform(ghost.transform());
+                  tween.el.transform(tween._ghost.transform());
                   
                 }
                 else if(prop === "anchor")
                 { 
-                  ghost._anchor = val; // save inside el's ghost
+                  tween._ghost._anchor = val; // save inside el's ghost
 
-                  if(this.config.updateAnchorCb) this.config.updateAnchorCb(tween.el, ghost._anchor)
+                  if(this.config.updateAnchorCb) this.config.updateAnchorCb(tween.el, tween._ghost._anchor)
                 }
                 else if (Fluv.VALID_SCALE_ATTRIBUTES.includes(prop)) {
+                    const tsX = val.decompose().scaleX;
+                    const tsY = val.decompose().scaleY;
+                  
+                    tween._ghost.transform({scale : [tsX, tsY], ox, oy}, true);
 
-                    if (prop === "scaleX" || prop === "scaleY") 
-                    {
-                      const { scaleX: tsX, scaleY: tsY } = val.decompose();
-                      const hasTranslation = ghost._hasTranslateX || ghost._hasTranslateY;
-                      const isFirstScale = prop === "scaleX" || (prop === "scaleY" && !ghost._hasScaleX);
-
-                      let scaleToApply;
-
-                      if (isFirstScale && !hasTranslation) {
-                        const curr = ghost.transform();
-                        scaleToApply = [tsX / curr.scaleX, tsY / curr.scaleY];
-                      } else {
-                        scaleToApply = [tsX, tsY];
-                      }
-
-                      ghost.transform({ scale: scaleToApply, ox, oy }, true);
-                      tween.el.transform(ghost.transform());
-                    }
-
-                    
+                    tween.el.transform(tween._ghost.transform());
                 } else if (prop === "rotate") {
-                    let curRot = tween.el.transform().rotate;
+                    let curRot = tween._ghost.transform().rotate;
                     const tarRot = val.decompose().rotate;
 
-                    // apply directly on the element
-                    tween.el.transform({rotate : tarRot - curRot, ox, oy}, true);
+                    tween._ghost.transform({rotate : tarRot - curRot, ox, oy}, true);
+                    
+                    tween.el.transform(tween._ghost.transform());
                 }
             }
             else if(prop == Fluv.PATH_TRANSFORMS.morphTo || prop == Fluv.PATH_TRANSFORMS.d)
@@ -1250,7 +1260,7 @@ const pathMorpherIns = new PathMorpher();
                     // Get the element dashoffset (numeric value)
                     var dashoffsetLength = tween.runner.dashoffsetLength;
                     // Get the dashoffset at each frame if one of the transform animation below exist (these change the element size, so dashoffsetLength)
-                    const targetSizeChanged = this._hasElementPropertiesAnimations(tween.el, [...Fluv.VALID_SIZE_ATTRIBUTES, ...Fluv.VALID_SCALE_ATTRIBUTES])
+                    const targetSizeChanged = this._elementAnimationsContainProperties(tween.el, [...Fluv.VALID_SIZE_ATTRIBUTES, ...Fluv.VALID_SCALE_ATTRIBUTES])
                     if(targetSizeChanged)
                     {
                         dashoffsetLength = Fluv.utils.getDashoffset(tween.el);
