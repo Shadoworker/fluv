@@ -790,7 +790,11 @@ const pathMorpherIns = new PathMorpher();
             ghost._anchor = anchor; // save inside ghost
 
             ghost._hasTranslateX = false; // marker to check if el has translateX keyframes or not
-            
+            ghost._hasTranslateY = false; // marker to check if el has translateY keyframes or not
+            ghost._hasScaleX = false; 
+            ghost._hasScaleY = false;
+
+
             const item = { el, targets : data.targets, _ghost: ghost, _snapshot : snapshot, animatables: {} };
 
 
@@ -829,6 +833,7 @@ const pathMorpherIns = new PathMorpher();
                           finalValue = startValue.clone().transform({ translate: [dx, dy] }, true);
 
                           if(prop == "translateX") ghost._hasTranslateX = true
+                          if(prop == "translateY") ghost._hasTranslateY = true
                       } 
                       else 
                       {
@@ -840,7 +845,12 @@ const pathMorpherIns = new PathMorpher();
                         else
                         {
                           if(prop == 'scaleX' || prop == 'scaleY')
+                          {
                             val = step.value / startValue.decompose()[prop];
+                            
+                            if(prop == "scaleX") ghost._hasScaleX = true
+                            if(prop == "scaleY") ghost._hasScaleY = true
+                          }
   
                           const tObj = { [prop]: val };
 
@@ -1060,6 +1070,7 @@ const pathMorpherIns = new PathMorpher();
            
             var val;
             var prop = tween.prop;
+            const ghost = tween._ghost;
             
             if (!Object.keys(Fluv.PATH_TRANSFORMS).includes(prop) || prop == Fluv.PATH_TRANSFORMS.followPath) // Dont get value from runner directly for these types
                 val = tween.runner.at(localProgress);
@@ -1067,46 +1078,60 @@ const pathMorpherIns = new PathMorpher();
             if (Fluv.VALID_TRANSFORMS.includes(prop)) 
             {
                 // process eventual anchor point for transforms
-                const ox = tween._ghost.bbox().x + tween._ghost.bbox().width * tween._ghost._anchor[0]
-                const oy = tween._ghost.bbox().y + tween._ghost.bbox().height * tween._ghost._anchor[1]
+                const ox = ghost.bbox().x + ghost.bbox().width * ghost._anchor[0]
+                const oy = ghost.bbox().y + ghost.bbox().height * ghost._anchor[1]
                 //----------------------------------------------
 
-                if (prop === "translateX" || (prop === "translateY" && !tween._ghost._hasTranslateX)) 
+                if (prop === "translateX" || (prop === "translateY" && !ghost._hasTranslateX)) 
                 {
                   // computed for translateY only if there is no translateX animation for the element 
                   tween.el.transform(val);
-                  tween._ghost.transform(val);
+                  ghost.transform(val);
                 }
                 else if(prop === "translateY") // else : translateX exist, so we make translateY additive
                 {
                   const ttY = val.decompose().translateY;
-                  let currentTY = tween._ghost.transform().translateY;
+                  let currentTY = ghost.transform().translateY;
                   
-                  tween._ghost.transform({translateY : ttY - currentTY}, true);
+                  ghost.transform({translateY : ttY - currentTY}, true);
 
-                  tween.el.transform(tween._ghost.transform());
+                  tween.el.transform(ghost.transform());
                   
                 }
                 else if(prop === "anchor")
                 { 
-                  tween._ghost._anchor = val; // save inside el's ghost
+                  ghost._anchor = val; // save inside el's ghost
 
-                  if(this.config.updateAnchorCb) this.config.updateAnchorCb(tween.el, tween._ghost._anchor)
+                  if(this.config.updateAnchorCb) this.config.updateAnchorCb(tween.el, ghost._anchor)
                 }
                 else if (Fluv.VALID_SCALE_ATTRIBUTES.includes(prop)) {
-                    const tsX = val.decompose().scaleX;
-                    const tsY = val.decompose().scaleY;
-                  
-                    tween._ghost.transform({scale : [tsX, tsY], ox, oy}, true);
 
-                    tween.el.transform(tween._ghost.transform());
+                    if (prop === "scaleX" || prop === "scaleY") 
+                    {
+                      const { scaleX: tsX, scaleY: tsY } = val.decompose();
+                      const hasTranslation = ghost._hasTranslateX || ghost._hasTranslateY;
+                      const isFirstScale = prop === "scaleX" || (prop === "scaleY" && !ghost._hasScaleX);
+
+                      let scaleToApply;
+
+                      if (isFirstScale && !hasTranslation) {
+                        const curr = ghost.transform();
+                        scaleToApply = [tsX / curr.scaleX, tsY / curr.scaleY];
+                      } else {
+                        scaleToApply = [tsX, tsY];
+                      }
+
+                      ghost.transform({ scale: scaleToApply, ox, oy }, true);
+                      tween.el.transform(ghost.transform());
+                    }
+
+                    
                 } else if (prop === "rotate") {
-                    let curRot = tween._ghost.transform().rotate;
+                    let curRot = tween.el.transform().rotate;
                     const tarRot = val.decompose().rotate;
 
-                    tween._ghost.transform({rotate : tarRot - curRot, ox, oy}, true);
-                    
-                    tween.el.transform(tween._ghost.transform());
+                    // apply directly on the element
+                    tween.el.transform({rotate : tarRot - curRot, ox, oy}, true);
                 }
             }
             else if(prop == Fluv.PATH_TRANSFORMS.morphTo || prop == Fluv.PATH_TRANSFORMS.d)

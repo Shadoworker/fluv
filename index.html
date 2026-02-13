@@ -117,9 +117,7 @@
         .translate(50, 145)
         .radius(4)
 
-        const rectAnchorRadius = 6
-        const rectAnchor = draw.circle(rectAnchorRadius).id('anchor').fill('#ff8fbc')
-        .translate(80, 175)
+
 
         // effect-1
         // rect.filterWith(function(add) {
@@ -136,6 +134,19 @@
         //     , 0, 0,   0,   0.2,   0
         //     , 0, 0,   0,   1,   0 ])
         // })
+
+
+        const rect2 = draw.rect(60, 50)
+        .id("svg-el2")
+        .fill("#a39")
+        .stroke({color : "#000", width : 0})
+        .translate(250, 230)
+        .radius(4)
+
+        
+        const rectAnchorRadius = 6
+        const rectAnchor = draw.circle(rectAnchorRadius).id('anchor').fill('black')
+        .translate(80, 175)
 
         /******************TEXT********************/
         var text = draw.text(function(add) {
@@ -187,29 +198,29 @@
 
         const nodeAnimations = {
             targets: "#svg-el1",
-            translateX: [
-                { value: 50, duration: 1, delay: 0 },
-                { value: 150, duration: 1000, delay: 0, easing: '-' },
-                { value: 340, duration: 1000, delay: 1000, easing: "-" },
-            ],
-            translateY: [
-                { value: 145, duration: 1, delay: 0 },
-                { value: 200, duration: 1000, delay: 0, easing: '-' },
-            ],
-            rotate: [
-                // { value: 45, duration: 1, delay: 0 },
-                { value: 90, duration: 1000, delay: 0, easing: "-" },
-            ],
-            anchor: [
-                { value: [0.5, 0.5], duration: 500, delay: 0, easing: "-" },
-            ],
+            // translateX: [
+            //     { value: 50, duration: 1, delay: 0 },
+            //     { value: 150, duration: 1000, delay: 0, easing: '-' },
+            //     { value: 340, duration: 1000, delay: 1000, easing: "-" },
+            // ],
+            // translateY: [
+            //     { value: 145, duration: 1, delay: 0 },
+            //     { value: 200, duration: 1000, delay: 0, easing: '-' },
+            // ],
+            // rotate: [
+            //     // { value: 45, duration: 1, delay: 0 },
+            //     { value: 90, duration: 1000, delay: 0, easing: "-" },
+            // ],
+            // anchor: [
+            //     { value: [0.5, 0.5], duration: 500, delay: 0, easing: "-" },
+            // ],
             
-            scaleX : [
-                { value: 1.5, duration: 1000, delay : 0 /* easing : 'easeOutElastic' */ },
-            ],
-            scaleY : [
-                { value: 1.5, duration: 1000, delay : 0 /* easing : 'easeOutElastic' */ },
-            ],
+            // scaleX : [
+            //     { value: 1.5, duration: 1000, delay : 0 /* easing : 'easeOutElastic' */ },
+            // ],
+            // scaleY : [
+            //     { value: 1.5, duration: 1000, delay : 0 /* easing : 'easeOutElastic' */ },
+            // ],
             // fill: [
             //     // { value: "#ef6", duration: 500 },
             //     // { value: "#00f", delay: 500, duration: 500 },
@@ -319,13 +330,39 @@
             // ],
         }
       
+
+        const rect2Animations = {
+            targets : "#svg-el2",
+            translateX: [
+                { value: 250, duration: 1, delay: 0 },
+                { value: 350, duration: 1000, delay: 0, easing: "-" },
+            ],
+            translateY: [
+                { value: 230, duration: 1, delay: 0 },
+                { value: 280, duration: 1000, delay: 0, easing: "-" },
+            ],
+            scaleX : [
+                { value: 1.5, duration: 1000, delay : 0 /* easing : 'easeOutElastic' */ },
+            ],
+            scaleY : [
+                { value: 2, duration: 1000, delay : 0 /* easing : 'easeOutElastic' */ },
+            ],
+            anchor: [
+                { value: [0, 0], duration: 500, delay: 0, easing: "-" },
+            ],
+            rotate: [
+                { value: 90, duration: 600, delay : 0},
+            ],
+        }
+
         // INITIALIZATOR
 
         // 1. Initialize
         const fl = new Fluv({speed : 1});
-        fl.add(nodeAnimations)
+        // fl.add(nodeAnimations)
+        fl.add(rect2Animations)
         // fl.add(textAnimations)
-        fl.add(staggerElsNodeAnimations)
+        // fl.add(staggerElsNodeAnimations)
         // fl.add(shapeAnimations)
 
         // 2. UI
