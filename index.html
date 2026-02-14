@@ -221,12 +221,13 @@
             // scaleY : [
             //     { value: 1.5, duration: 1000, delay : 0 /* easing : 'easeOutElastic' */ },
             // ],
-            // fill: [
-            //     // { value: "#ef6", duration: 500 },
-            //     // { value: "#00f", delay: 500, duration: 500 },
-            //     { value: "linear-gradient(90deg, rgba(125,0,102,1) 20%, rgba(0,255,153,1) 100%)", delay: 0, duration: 1000 },
-
-            // ],
+            fill: [
+                // { value: "#ef6", duration: 500 },
+                // { value: "#00f", delay: 500, duration: 500 },
+                // { value: "linear-gradient(90deg, rgba(125,0,102,1) 20%, rgba(0,255,153,1) 100%)", delay: 0, duration: 1000 },
+                    { value: 'rgba(255, 255, 255, 1.0)', duration: 1 },
+                    { value: 'rgba(25, 105, 55, 1.0)', duration: 1000},
+            ],
             // // width : [
             // //     { value: 400, duration: 1000 },
             // // ],
@@ -281,14 +282,16 @@
                 // { value: 300, duration: 1000, delay: 0, easing: '-' },
                 { value: 340, duration: 1000, delay: 0, easing: "-" },
             ],
-            // fill: [
-            //     // { value: "#ef6", duration: 500 },
-            //     // { value: "#00f", delay: 500, duration: 500 },
-            // ],
-            width : [
-                { value: 15, duration: 1 },
-                { value: 25, duration: 1000 },
+            fill: [
+                // { value: "#ef6", duration: 500 },
+                // { value: "#00f", delay: 500, duration: 500 },
+                { value: 'rgba(255, 255, 255, 1)', duration: 1 },
+                { value: 'rgba(25, 105, 55, 1)', duration: 1000},
             ],
+            // width : [
+            //     { value: 15, duration: 1 },
+            //     { value: 25, duration: 1000 },
+            // ],
         }
 
         const staggerElsNodeAnimations = {
@@ -303,8 +306,8 @@
                 { value: 90, duration: 600, delay : [0, 1 ,100] /* easing : 'easeOutElastic' */ },
             ],
             fill: [
-                { value: '#10b981', duration: 1 },
-                { value: '#ef6', duration: 600, delay: [0, 1 ,100] },
+                { value: 'rgba(255, 255, 255, 1)', duration: 1 },
+                { value: 'rgba(25, 105, 55, 1)', duration: 600, delay: [0, 1 ,100] },
             ],
         };
 
@@ -359,7 +362,7 @@
 
         // 1. Initialize
         const fl = new Fluv({speed : 1});
-        // fl.add(nodeAnimations)
+        fl.add(nodeAnimations)
         fl.add(rect2Animations)
         // fl.add(textAnimations)
         // fl.add(staggerElsNodeAnimations)
