@@ -428,7 +428,7 @@ class PathReshaper {
 const pathMorpherIns = new PathMorpher();
 
 
-/* export default */ class Fluv {
+/* export default  */class Fluv {
     static ANIMATBLES_ORDER = ["translateX", "translateY", "anchor", "scaleX", "scaleY", "rotate", "width", "height", "strokeDashoffset"];
     static VALID_TRANSFORMS = ['translateX', 'translateY', 'translateZ', 'rotate', 'rotateX', 'rotateY', 'rotateZ', 'scaleX', 'scaleY', 'anchor', 'anchorX', 'anchorY', 'skew', 'skewX', 'skewY', 'perspective', 'matrix', 'matrix3d'];
     static VALID_SCALE_ATTRIBUTES = ['scaleX', 'scaleY'];
@@ -933,7 +933,7 @@ const pathMorpherIns = new PathMorpher();
                         const toPathSelector = finalValue; //
 
                         // Check if we start from initial or from current value
-                        const fromPath = step.params?.resetPath ? el.attr('d') : Array.isArray(startValue) ? startValue.toString() : startValue;
+                        const fromPath = step.params?.resetPath ? el.attr('d') : Array.isArray(startValue) ? startValue.toString() : startValue; // startValue is transformed into SVGArray by the constructor; so we stringify it
                         const toPathEl = SVG.find(toPathSelector)[0];
 
                         if(!toPathEl) return;
@@ -965,6 +965,7 @@ const pathMorpherIns = new PathMorpher();
                     }
                     else if(prop == Fluv.PATH_TRANSFORMS.d)
                     {
+                        startValue = Array.isArray(startValue) ? startValue.toString() : startValue; // startValue is transformed into SVGArray by the constructor; so we stringify it
                         // Get real interpolation values
                         const reshaper = new PathReshaper();
                         const reshapResult = reshaper.reshape(startValue, finalValue)
@@ -1201,8 +1202,9 @@ const pathMorpherIns = new PathMorpher();
             else if(prop == Fluv.PATH_TRANSFORMS.morphTo || prop == Fluv.PATH_TRANSFORMS.d)
             {
                 const morph = tween.runner.interpolator(localProgress);
+                val = morph;
                 // Set attribute value
-                tween.el.attr({ 'd': morph });
+                tween.el.attr({ 'd': val });
             }
             else if(prop == Fluv.PATH_TRANSFORMS.followPath)
             {
