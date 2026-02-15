@@ -972,6 +972,9 @@ const pathMorpherIns = new PathMorpher();
                     }
                     else if(prop == Fluv.PATH_TRANSFORMS.followPath)
                     {
+                        // Reset always to 0 (start)
+                        runner.from(0);
+
                         const followedPathId = finalValue;
                         const followedPath = SVG.find(followedPathId)[0];
                         const pathTotalLength = followedPath.node.getTotalLength();
