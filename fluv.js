@@ -915,7 +915,6 @@ const pathMorpherIns = new PathMorpher();
                     }
                     else if(prop == "strokeDasharray")
                     {
-                      // debugger;
                       // Reset runner to avoid previous value type conflict with new
                       runner = new SVG.Morphable();
                       // We ensure start and final have the same number of items in their array
@@ -933,10 +932,13 @@ const pathMorpherIns = new PathMorpher();
                         // d values are computed otherwise they change over tweening and will cause unwanted behaviour
                         const toPathSelector = finalValue; //
 
-                        const fromPathEl = el;
+                        // Check if we start from initial or from current value
+                        const fromPath = step.params?.resetPath ? el.attr('d') : Array.isArray(startValue) ? startValue.toString() : startValue;
                         const toPathEl = SVG.find(toPathSelector)[0];
 
-                        runner.fromPath = {d : fromPathEl.attr('d')};
+                        if(!toPathEl) return;
+
+                        runner.fromPath = {d : fromPath};
                         runner.toPath = {d : toPathEl.attr('d')};
 
                         // Get source path
@@ -974,6 +976,7 @@ const pathMorpherIns = new PathMorpher();
                     { 
                         const followedPathId = finalValue;
                         const followedPath = SVG.find(followedPathId)[0];
+                        if(!followedPath) return;
                         const pathTotalLength = followedPath.node.getTotalLength();
 
                         finalValue = pathTotalLength;
