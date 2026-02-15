@@ -971,18 +971,24 @@ const pathMorpherIns = new PathMorpher();
                         runner.interpolator = interpolator;
                     }
                     else if(prop == Fluv.PATH_TRANSFORMS.followPath)
-                    {
-                        // Reset always to 0 (start)
-                        runner.from(0);
-
+                    { 
                         const followedPathId = finalValue;
                         const followedPath = SVG.find(followedPathId)[0];
                         const pathTotalLength = followedPath.node.getTotalLength();
 
                         finalValue = pathTotalLength;
 
+                        if(!step.params?.reversed)
+                           runner.from(0)  // Reset always to 0 (start)
+                        else
+                        {
+                          runner.from(finalValue)
+                          finalValue = 0;
+                        }
+
+
                         runner.followedPath = followedPath;
-                        runner.params = {centered : step.params?.centered||false,rotated : step.params?.rotated||false}
+                        runner.params = {centered : step.params?.centered||false,rotated : step.params?.rotated||false, reversed : step.params?.reversed||false}
 
                     }
                     else if(Object.keys(Fluv.EFFECTS_PROPERTIES).includes(prop)) // effect/filters
