@@ -198,11 +198,11 @@
 
         const nodeAnimations = {
             targets: "#svg-el1",
-            // translateX: [
-            //     { value: 50, duration: 1, delay: 0 },
-            //     { value: 150, duration: 1000, delay: 0, easing: '-' },
-            //     { value: 340, duration: 1000, delay: 1000, easing: "-" },
-            // ],
+            translateX: [
+                { value: 50, duration: 1, delay: 0 },
+                { value: 150, duration: 1000, delay: 0, steps : 1, easing: '-' },
+                // { value: 340, duration: 1000, delay: 1000, easing: "-" },
+            ],
             // translateY: [
             //     { value: 145, duration: 1, delay: 0 },
             //     { value: 200, duration: 1000, delay: 0, easing: '-' },
@@ -221,13 +221,13 @@
             // scaleY : [
             //     { value: 1.5, duration: 1000, delay : 0 /* easing : 'easeOutElastic' */ },
             // ],
-            fill: [
-                // { value: "#ef6", duration: 500 },
-                // { value: "#00f", delay: 500, duration: 500 },
-                // { value: "linear-gradient(90deg, rgba(125,0,102,1) 20%, rgba(0,255,153,1) 100%)", delay: 0, duration: 1000 },
-                    { value: 'rgba(255, 255, 255, 1.0)', duration: 1 },
-                    { value: 'rgba(25, 105, 55, 1.0)', duration: 1000},
-            ],
+            // fill: [
+            //     // { value: "#ef6", duration: 500 },
+            //     // { value: "#00f", delay: 500, duration: 500 },
+            //     // { value: "linear-gradient(90deg, rgba(125,0,102,1) 20%, rgba(0,255,153,1) 100%)", delay: 0, duration: 1000 },
+            //         { value: 'rgba(255, 255, 255, 1.0)', duration: 1 },
+            //         { value: 'rgba(25, 105, 55, 1.0)', duration: 1000},
+            // ],
             // // width : [
             // //     { value: 400, duration: 1000 },
             // // ],
@@ -363,7 +363,7 @@
         // 1. Initialize
         const fl = new Fluv({speed : 1});
         fl.add(nodeAnimations)
-        fl.add(rect2Animations)
+        // fl.add(rect2Animations)
         // fl.add(textAnimations)
         // fl.add(staggerElsNodeAnimations)
         // fl.add(shapeAnimations)

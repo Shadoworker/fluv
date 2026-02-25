@@ -1,4 +1,3 @@
-// import SVG from './svg'
 // -----------------------------
 // Path Morphing
 
@@ -428,7 +427,7 @@ class PathReshaper {
 const pathMorpherIns = new PathMorpher();
 
 
-/* export default  */class Fluv {
+/* export default */ class Fluv {
     static ANIMATBLES_ORDER = ["translateX", "translateY", "anchor", "scaleX", "scaleY", "rotate", "width", "height", "strokeDashoffset"];
     static VALID_TRANSFORMS = ['translateX', 'translateY', 'translateZ', 'rotate', 'rotateX', 'rotateY', 'rotateZ', 'scaleX', 'scaleY', 'anchor', 'anchorX', 'anchorY', 'skew', 'skewX', 'skewY', 'perspective', 'matrix', 'matrix3d'];
     static VALID_SCALE_ATTRIBUTES = ['scaleX', 'scaleY'];
@@ -437,7 +436,7 @@ const pathMorpherIns = new PathMorpher();
     static PATH_TRANSFORMS = {'followPath' : 'followPath', 'morphTo' : 'morphTo', 'd': 'd'};
     static STROKE_TRANSFORMS = {'strokeWidth': 'stroke-width' ,'strokeDasharray' : 'stroke-dasharray', 'strokeDashoffset':'stroke-dashoffset'};
     static EFFECTS_PROPERTIES = {"effectX" : "effectX", "effectY" : "effectY", "effectBlur" : "effectBlur", "effectColor" : "effectColor"};
-
+    static EXTRAS_PROPERTIES = {"borderRadius" : "borderRadius", "order" : "order"};
 
     static GEOMETRY_ALTERING_PROPERTIES = ['d', 'points', 'text'];
 
@@ -480,9 +479,10 @@ const pathMorpherIns = new PathMorpher();
         easeInOutBounce: [0.68, -0.55, 0.265, 1.55],
     };
 
+    static EPSILON = 0.01;
 
     static utils = {
-
+   
         getDistance(p1, p2) {
             return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
         },
@@ -753,7 +753,7 @@ const pathMorpherIns = new PathMorpher();
 
     }
 
-    constructor(options = {duration : null, easing : 'linear', loop: false, autoplay : false, delay : 0, managedState : false, update : null, complete : null, gradientIdCb : null, gradientSetterCb : null, updateImagePatternCb : null, getManagedState : null, updateAnchorCb : null}) {
+    constructor(options = {duration : null, easing : 'linear', loop: false, autoplay : false, delay : 0, managedState : false, update : null, complete : null, gradientIdCb : null, gradientSetterCb : null, updateImagePatternCb : null, getManagedState : null, updateAnchorCb : null, updateOrderCb : null}) {
         this.animations = [];
         this._allTweens = [];
         // Options
@@ -775,6 +775,7 @@ const pathMorpherIns = new PathMorpher();
             updateImagePatternCb : options.updateImagePatternCb || null, // cb to update the rect-as-image-holder element's pattern image
             getManagedState : options.getManagedState || null, // cb to get the managed state of a given el's property
             updateAnchorCb : options.updateAnchorCb || null, // cb to handle what happen to our element (visually?) when the anchor is animated
+            updateOrderCb : options.updateOrderCb || null, // cb to handle element' order updating
             
           };
 
@@ -813,7 +814,7 @@ const pathMorpherIns = new PathMorpher();
             const anchor = this.config.managedState ? [el.anchor()?.x, el.anchor()?.y] : [0.5, 0.5]; // get or set default anchor
             ghost._anchor = anchor; // save inside ghost
 
-          
+
             if(hasTransforms && !hasTranslateX) // Create then a default (fixed) translateX (using element initial translateX)
             {
               data["translateX"] = [{value : snapshot.transform().translateX, duration : elementAnimationDuration}]
@@ -824,7 +825,7 @@ const pathMorpherIns = new PathMorpher();
 
 
             for (const prop in data) {
-                if (prop === 'targets' || !data[prop]) continue;
+                if (prop === 'targets' || !data[prop] || !Array.isArray(data[prop])) continue;
 
                 item.animatables[prop] = [];
 
@@ -832,11 +833,10 @@ const pathMorpherIns = new PathMorpher();
                 let startAnchor = ghost._anchor; // get from ghost
 
                 const steps = data[prop];
- 
 
                 steps?.forEach((step, j) => {
-                    const localDelay = Array.isArray(step.delay) 
-                        ? this._calculateStagger(step.delay, elements.length, i)
+                    const localDelay = Array.isArray(step.stagger) 
+                        ? this._calculateStagger(step.delay || 0, step.stagger, elements.length, i)
                         : (step.delay || 0);
                     
                     // Add global timeline delay
@@ -845,6 +845,8 @@ const pathMorpherIns = new PathMorpher();
                     var runner = new SVG.Morphable();
                     if(!Object.keys(Fluv.COLOR_ATTRIBUTES).includes(prop))
                       runner.from(startValue);
+
+                    runner.params = step.params;
 
                     let finalValue = step.value;
                     let finalAnchor = step.value;
@@ -997,6 +999,7 @@ const pathMorpherIns = new PathMorpher();
                     }
                     else if(Object.keys(Fluv.EFFECTS_PROPERTIES).includes(prop)) // effect/filters
                     {
+                        // debugger;
                         // Reset runner to avoid previous value type conflict with new
                         runner = new SVG.Morphable();
 
@@ -1013,12 +1016,31 @@ const pathMorpherIns = new PathMorpher();
                         }
                         else
                         {
-                          startValue = this.config.getManagedState(el, prop, {effectSelector, filterSelector, filterProperty});
-                        }
+                          const params = {effectSelector, filterSelector, filterProperty};
+                          if(startValue == null)
+                            startValue = this.config.getManagedState(el, prop, params);
+ 
 
+                          if(prop == Fluv.EFFECTS_PROPERTIES.effectColor && filterProperty == "flood-color")
+                          {
+                            // Format value (array) to rgba string
+                            startValue = Array.isArray(startValue) ? `rgba(${startValue[0]},${startValue[1]},${startValue[2]},${startValue[3]})` : startValue;
+
+                            const formattedStartValue = Fluv.utils.formatColor(startValue);
+                            const formattedFinalValue = Fluv.utils.formatColor(finalValue);
+                            
+                            const startValueArray = Array.isArray(formattedStartValue) ? formattedStartValue : Fluv.utils.rgbaToArray(formattedStartValue) // in case we are in keyframe 1+
+                            const finalValueArray = Fluv.utils.rgbaToArray(formattedFinalValue)
+
+                            startValue = startValueArray;
+                            finalValue = finalValueArray;
+
+                          }
+                        }
+ 
+                        
                         runner.from(startValue);
 
-                        runner.params = step.params;
                     }
 
 
@@ -1028,16 +1050,18 @@ const pathMorpherIns = new PathMorpher();
                     else
                       runner.to(finalValue);
 
-                    runner.staggered = Array.isArray(step.delay) ? localDelay : false;
+                    runner.staggered = Array.isArray(step.stagger) ? step.stagger : false;
                     // Easing logic
                     const easingName = step.easing || this.config.easing;
                     const b = Fluv.EASINGS[easingName] || Fluv.EASINGS.linear;
-                    runner.stepper(new SVG.Ease(SVG.easing.bezier(b[0], b[1], b[2], b[3])));
+
+                    runner.stepper(step.steps ? new SVG.Ease(SVG.easing.steps(step.steps)) : new SVG.Ease(SVG.easing.bezier(b[0], b[1], b[2], b[3])));
 
                     // IMPORTANT: Update startValue for the next step in the sequence
                     // For non-transforms, we grab the constructor to ensure value type compatibility
-                    if (!Fluv.VALID_TRANSFORMS.includes(prop)) {
-                        startValue = new runner._morphObj.constructor(runner.to());
+                    if (!Fluv.VALID_TRANSFORMS.includes(prop)) 
+                    {
+                      startValue = new runner._morphObj.constructor(runner.to());
                     }
 
                     // strokeDasharray specific case
@@ -1094,7 +1118,8 @@ const pathMorpherIns = new PathMorpher();
       var durations = [];
       for (const prop in data) 
       {
-        if (prop === 'targets' || !data[prop]) continue; // Skip metadata
+
+        if (prop === 'targets' || !data[prop] || !Array.isArray(data[prop])) continue; // Skip metadata
         const keyframes = data[prop];
         // 2. Sum up the sequence within this specific property
         keyframes.forEach(kf => {
@@ -1120,29 +1145,36 @@ const pathMorpherIns = new PathMorpher();
     _render(elapsed) {
         const tweens = [...this._allTweens];
         const len = tweens.length;
-         
+        
+        for (let i = 0; i < len; i++) {
+          const tween = tweens[i];
+
+          /**********RESET OPTS************* */
+          if(this.fullReset && tween.runner.staggered) 
+          {
+              if(!tween.delayTemp) tween.delayTemp = tween.delay;
+              tween.delay = 0
+          }
+          else if(!this.fullReset && tween.delayTemp)
+          {
+              tween.delay = tween.delayTemp;
+          }
+          /********************************* */
+        }
+
         for (let i = 0; i < len; i++) {
             const tween = tweens[i];
+ 
+            var localProgress = Math.max(0, Math.min(1, (elapsed - tween.delay) / (tween.duration || 1)));
+            if (tween.prop == Fluv.EXTRAS_PROPERTIES.order && Math.abs(localProgress - 1) < Fluv.EPSILON)
+                localProgress = 1;
 
-            /**********RESET OPTS************* */
-            if(this.fullReset && tween.runner.staggered) 
-            {
-                if(!tween.delayTemp) tween.delayTemp = tween.delay;
-                tween.delay = 0
-            }
-            else if(!this.fullReset && tween.delayTemp)
-            {
-                tween.delay = tween.delayTemp;
-            }
-            /********************************* */
-            const localProgress = Math.max(0, Math.min(1, (elapsed - tween.delay) / (tween.duration || 1)));
-            
             /** * PERFORMANCE GATE: 
              * We skip the heavy runner calculation if the playhead hasn't reached the tween's delay yet.
              * EXCEPTION: If we are seeking (!isPlaying), we MUST process staggered elements 
              * even before their delay to ensure their initial state is rendered correctly.
              */
-            const isPreDelay = elapsed < tween.delay && localProgress === 0;
+            const isPreDelay = elapsed < tween.delay || elapsed > tween.delay+tween.duration;
             const shouldSkip = this.isPlaying ? isPreDelay : (isPreDelay && !tween.runner.staggered);
 
             if (shouldSkip) continue;
@@ -1305,8 +1337,25 @@ const pathMorpherIns = new PathMorpher();
                 const propertyHandlerEl = effectEl?.findOne(filterSelector);
 
                 if(propertyHandlerEl)
-                    propertyHandlerEl?.attr(filterProperty, val.toString());
+                {
+                  if(prop == Fluv.EFFECTS_PROPERTIES.effectColor && filterProperty == "flood-color")
+                  {
+                    var rgbaColor = `rgba(${val[0]},${val[1]},${val[2]},${val[3]})`
+                    val = rgbaColor;
+                  }
 
+                  propertyHandlerEl?.attr(filterProperty, val.toString());
+
+                }
+
+            }
+            else if(prop == Fluv.EXTRAS_PROPERTIES.borderRadius)
+            {
+              tween.el.radius(val);
+            }
+            else if(prop == Fluv.EXTRAS_PROPERTIES.order)
+            {
+              this.config.updateOrderCb ? this.config.updateOrderCb(tween.el, val, {progress : localProgress, params : tween.runner.params}) : null
             }
             else 
             {
@@ -1379,6 +1428,7 @@ const pathMorpherIns = new PathMorpher();
 
 
     play(direction = 1, restart = false, reversing = false) {
+
         this.pause();
         if(restart || (this.isCompleted && !reversing)) this._fullReset();
         
@@ -1437,7 +1487,7 @@ const pathMorpherIns = new PathMorpher();
         }, 100);
 
     }
-
+ 
     restart()
     {
       this.play(1, true)
@@ -1494,11 +1544,13 @@ const pathMorpherIns = new PathMorpher();
         if (prop == Fluv.PATH_TRANSFORMS.followPath) return 0;
         if (Object.keys(Fluv.PATH_TRANSFORMS).includes(prop)) return el.attr("d")
         if(Object.keys(Fluv.EFFECTS_PROPERTIES).includes(prop)) return null; // effect/filters
+        if (prop == Fluv.EXTRAS_PROPERTIES.borderRadius) return el.rx() || 0;
 
         return el.attr(prop) || 0;
       }
       else // managed state
       {
+        if(Object.keys(Fluv.EFFECTS_PROPERTIES).includes(prop)) return null; // effect/filters
         return this.config.getManagedState(el, prop)
       }
           
@@ -1511,12 +1563,13 @@ const pathMorpherIns = new PathMorpher();
       return result;
     }
 
-    _calculateStagger(delayArr, totalElements, index) {
-      let [s, r, g] = delayArr;
+    _calculateStagger(delay, staggerArr, totalElements, index) {
+      let [s, r, g] = staggerArr;
       if (typeof s === "string" && s.includes("%")) s = (totalElements * parseInt(s)) / 100;
       if (typeof r === "string" && r.includes("%")) r = (totalElements * parseInt(r)) / 100;
-      return index < s ? 0 : Math.floor((index - s) / r) * g;
+      return index < s ? 0 : Math.floor((index - s) / r) * (delay+g);
     }
+ 
 }
 
 
