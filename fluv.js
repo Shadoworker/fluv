@@ -1097,6 +1097,7 @@ const pathMorpherIns = new PathMorpher();
 
     _compileTimeline() {
       const tweens = [];
+
       let calcMax = 0;
       for (let i = 0; i < this.animations.length; i++) {
           const animatables = this.animations[i].animatables;
@@ -1105,7 +1106,7 @@ const pathMorpherIns = new PathMorpher();
               for (let k = 0; k < stepTweens.length; k++) {
                   const tw = stepTweens[k];
                   tweens.push(tw);
-                  calcMax = Math.max(calcMax, tw.delay + tw.duration);
+                  calcMax = Math.max(calcMax, (tw.delay||0) + (tw.duration||0));
               }
           }
       }
@@ -1145,26 +1146,22 @@ const pathMorpherIns = new PathMorpher();
     _render(elapsed) {
         const tweens = [...this._allTweens];
         const len = tweens.length;
-        
-        for (let i = 0; i < len; i++) {
-          const tween = tweens[i];
-
-          /**********RESET OPTS************* */
-          if(this.fullReset && tween.runner.staggered) 
-          {
-              if(!tween.delayTemp) tween.delayTemp = tween.delay;
-              tween.delay = 0
-          }
-          else if(!this.fullReset && tween.delayTemp)
-          {
-              tween.delay = tween.delayTemp;
-          }
-          /********************************* */
-        }
 
         for (let i = 0; i < len; i++) {
             const tween = tweens[i];
- 
+
+            /**********RESET OPTS************* */
+            if(this.fullReset && tween.runner.staggered) 
+            {
+                if(!tween.delayTemp) tween.delayTemp = tween.delay;
+                tween.delay = 0
+            }
+            else if(!this.fullReset && tween.delayTemp)
+            {
+                tween.delay = tween.delayTemp;
+            }
+            /********************************* */
+
             var localProgress = Math.max(0, Math.min(1, (elapsed - tween.delay) / (tween.duration || 1)));
             if (tween.prop == Fluv.EXTRAS_PROPERTIES.order && Math.abs(localProgress - 1) < Fluv.EPSILON)
                 localProgress = 1;
@@ -1478,7 +1475,6 @@ const pathMorpherIns = new PathMorpher();
                 this.lastElapsed = elapsed;
                 this._render(elapsed);
                 this.progress = (elapsed / this.maxDuration * 100);
-
                 if (this.config.onUpdate) this.config.onUpdate();
                 this.rafId = requestAnimationFrame(tick);
             };

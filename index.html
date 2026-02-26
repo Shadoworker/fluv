@@ -200,7 +200,7 @@
             targets: "#svg-el1",
             translateX: [
                 { value: 50, duration: 1, delay: 0 },
-                { value: 150, duration: 1000, delay: 0, steps : 1, easing: '-' },
+                { value: 150, duration: 1000, delay: 0, /* steps : 2, */ easing: '-' },
                 // { value: 340, duration: 1000, delay: 1000, easing: "-" },
             ],
             // translateY: [
@@ -298,16 +298,16 @@
             targets: ".stagger-el",
             translateY: [
                 // { value: 95.85, duration: 1, delay: [0, 1 ,100] },
-                { value: 125, duration: 1000, delay:  [0, 1 ,100], easing : 'easeOutCirc' },
+                { value: 125, duration: 1000, delay: 0, stagger : [0, 1 ,100], easing : 'easeOutCirc' },
             ],
             
             rotate: [
                 { value: 0, duration: 1 },
-                { value: 90, duration: 600, delay : [0, 1 ,100] /* easing : 'easeOutElastic' */ },
+                { value: 90, duration: 600, delay : 0, stagger : [0, 1 ,100] /* easing : 'easeOutElastic' */ },
             ],
             fill: [
                 { value: 'rgba(255, 255, 255, 1)', duration: 1 },
-                { value: 'rgba(25, 105, 55, 1)', duration: 600, delay: [0, 1 ,100] },
+                { value: 'rgba(25, 105, 55, 1)', duration: 600, delay: 0, stagger : [0, 1 ,100] },
             ],
         };
 
@@ -365,7 +365,7 @@
         fl.add(nodeAnimations)
         // fl.add(rect2Animations)
         // fl.add(textAnimations)
-        // fl.add(staggerElsNodeAnimations)
+        fl.add(staggerElsNodeAnimations)
         // fl.add(shapeAnimations)
 
         // 2. UI
@@ -374,6 +374,7 @@
 
         function update()
         {
+            // console.log(fl.progress)
             if (seeker)
                 seeker.value = fl.progress;
             if (status)
