@@ -110,7 +110,7 @@
 
         /*******************RECT*********************/
         const draw = SVG().addTo("#canvas").size(500, 350);
-        const rect = draw.rect(60, 60)
+        const rect = draw.rect(70, 60)
         .id("svg-el1")
         .fill("#f06")
         .stroke({color : "#000", width : 0})
@@ -198,11 +198,26 @@
 
         const nodeAnimations = {
             targets: "#svg-el1",
+
             translateX: [
                 { value: 50, duration: 1, delay: 0 },
-                { value: 150, duration: 1000, delay: 0, /* steps : 2, */ easing: '-' },
-                // { value: 340, duration: 1000, delay: 1000, easing: "-" },
+                { value: 200, duration: 1000, delay: 0 },
+                { value: 300, duration: 1000, delay: 1000 },
             ],
+
+            translateY: [
+                { value: 145, duration: 1, delay: 0 },
+                { value: 220, duration: 1000, delay: 0 },
+            ],
+            rotate: [
+                { value: 90, duration: 1000, delay: 0 },
+            ],
+
+            // translateX: [
+            //     { value: 50, duration: 1, delay: 0 },
+            //     { value: 150, duration: 1000, delay: 0, /* steps : 2, */ easing: '-' },
+            //     // { value: 340, duration: 1000, delay: 1000, easing: "-" },
+            // ],
             // translateY: [
             //     { value: 145, duration: 1, delay: 0 },
             //     { value: 200, duration: 1000, delay: 0, easing: '-' },
@@ -215,12 +230,12 @@
             //     { value: [0.5, 0.5], duration: 500, delay: 0, easing: "-" },
             // ],
             
-            // scaleX : [
-            //     { value: 1.5, duration: 1000, delay : 0 /* easing : 'easeOutElastic' */ },
-            // ],
-            // scaleY : [
-            //     { value: 1.5, duration: 1000, delay : 0 /* easing : 'easeOutElastic' */ },
-            // ],
+            scaleX : [
+                { value: 1.5, duration: 1000, delay : 0 /* easing : 'easeOutElastic' */ },
+            ],
+            scaleY : [
+                { value: 1.5, duration: 1000, delay : 0 /* easing : 'easeOutElastic' */ },
+            ],
             // fill: [
             //     // { value: "#ef6", duration: 500 },
             //     // { value: "#00f", delay: 500, duration: 500 },

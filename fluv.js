@@ -1,3 +1,4 @@
+// import SVG from './svg'
 // -----------------------------
 // Path Morphing
 
@@ -814,11 +815,14 @@ const pathMorpherIns = new PathMorpher();
             const anchor = this.config.managedState ? [el.anchor()?.x, el.anchor()?.y] : [0.5, 0.5]; // get or set default anchor
             ghost._anchor = anchor; // save inside ghost
 
+            // transform alterers states
+            ghost._transalterersStates = {};
 
             if(hasTransforms && !hasTranslateX) // Create then a default (fixed) translateX (using element initial translateX)
             {
               data["translateX"] = [{value : snapshot.transform().translateX, duration : elementAnimationDuration}]
               data = this._reorderKeys(data); // reorder
+              ghost._staticTranslateX = true // flag for fake (static) translateX animation
             }
   
             const item = { el, targets : data.targets, _ghost: ghost, _snapshot : snapshot, animatables: {} };
@@ -855,10 +859,12 @@ const pathMorpherIns = new PathMorpher();
                     {
                       var val = step.value - startValue.decompose()[prop];
 
-                      if (prop === "translateX" || prop === "translateY") {
-                          const dx = prop === "translateX" ? val : 0;
-                          const dy = prop === "translateY" ? val : 0;
+                      if (prop === 'translateX' || prop === 'translateY') {
+                          const dx = prop === 'translateX' ? val : 0;
+                          const dy = prop === 'translateY' ? val : 0;
                           finalValue = startValue.clone().transform({ translate: [dx, dy] }, true);
+
+                          if(prop === 'translateY') ghost._transalterersStates[prop] = step.value;
                       } 
                       else 
                       {
@@ -877,6 +883,8 @@ const pathMorpherIns = new PathMorpher();
                           finalValue = startValue.clone().transform(tObj, true);
 
                         }
+
+                        ghost._transalterersStates[prop] = step.value;
 
                       }
 
@@ -1143,22 +1151,60 @@ const pathMorpherIns = new PathMorpher();
       return this._objectContainsProperties(thisAnimatables, props)
     }
 
+    _tweensContainElementAnimation(tweens, el, prop) {
+
+      return tweens.find(t=>t.el.id() == el.id() && t.prop == prop) ? true : false;
+
+    }
+
+
+    // Gets the tweens for this specific time
+    _getElapsedTweens(elapsed)
+    {
+      const tweens = [...this._allTweens];
+      const len = tweens.length;
+
+      const elapsedTweens = [];
+
+      for (let i = 0; i < len; i++) {
+          const tween = tweens[i];
+
+          /** * PERFORMANCE GATE: 
+           * We skip the heavy runner calculation if the playhead hasn't reached the tween's delay yet.
+           * EXCEPTION: If we are seeking (!isPlaying), we MUST process staggered elements 
+           * even before their delay to ensure their initial state is rendered correctly.
+           */
+          const isPreDelay = elapsed < tween.delay || elapsed > tween.delay+tween.duration;
+          const shouldSkip = this.isPlaying ? isPreDelay : (isPreDelay && !tween.runner.staggered);
+
+          if (!shouldSkip){
+            elapsedTweens.push(tween);
+          };
+          
+          /************************************************** */
+      }
+
+      return elapsedTweens;
+    }
+
     _render(elapsed) {
-        const tweens = [...this._allTweens];
-        const len = tweens.length;
+
+        const elapsedTweens = this._getElapsedTweens(elapsed);
+
+        const len = elapsedTweens.length;
 
         for (let i = 0; i < len; i++) {
-            const tween = tweens[i];
+            const tween = elapsedTweens[i];
 
             /**********RESET OPTS************* */
             if(this.fullReset && tween.runner.staggered) 
             {
-                if(!tween.delayTemp) tween.delayTemp = tween.delay;
-                tween.delay = 0
+              if(!tween.delayTemp) tween.delayTemp = tween.delay;
+              tween.delay = 0
             }
             else if(!this.fullReset && tween.delayTemp)
             {
-                tween.delay = tween.delayTemp;
+              tween.delay = tween.delayTemp;
             }
             /********************************* */
 
@@ -1166,17 +1212,6 @@ const pathMorpherIns = new PathMorpher();
             if (tween.prop == Fluv.EXTRAS_PROPERTIES.order && Math.abs(localProgress - 1) < Fluv.EPSILON)
                 localProgress = 1;
 
-            /** * PERFORMANCE GATE: 
-             * We skip the heavy runner calculation if the playhead hasn't reached the tween's delay yet.
-             * EXCEPTION: If we are seeking (!isPlaying), we MUST process staggered elements 
-             * even before their delay to ensure their initial state is rendered correctly.
-             */
-            const isPreDelay = elapsed < tween.delay || elapsed > tween.delay+tween.duration;
-            const shouldSkip = this.isPlaying ? isPreDelay : (isPreDelay && !tween.runner.staggered);
-
-            if (shouldSkip) continue;
-            
-            /************************************************** */
            
             var val;
             var prop = tween.prop;
@@ -1186,47 +1221,106 @@ const pathMorpherIns = new PathMorpher();
 
             if (Fluv.VALID_TRANSFORMS.includes(prop)) 
             {
+                const ghost = tween._ghost;
                 // process eventual anchor point for transforms
-                const ox = tween._ghost.bbox().x + tween._ghost.bbox().width * tween._ghost._anchor[0]
-                const oy = tween._ghost.bbox().y + tween._ghost.bbox().height * tween._ghost._anchor[1]
+                const ox = ghost.bbox().x + ghost.bbox().width * ghost._anchor[0]
+                const oy = ghost.bbox().y + ghost.bbox().height * ghost._anchor[1]
                 //----------------------------------------------
+
+                /*************Transformers funcs************ */
+                const translateYTransformer = (val)=>{
+                  let currentTY = ghost.transform().translateY;
+                  
+                  ghost.transform({translateY : val - currentTY}, true);
+
+                  tween.el.transform(ghost.transform());
+                }
+
+                const rotateTransformer = (val)=>{
+
+                  let curRot = ghost.transform().rotate;
+
+                  ghost.transform({rotate : val - curRot, ox, oy}, true);
+                  
+                  tween.el.transform(ghost.transform());
+                }
+
+                const scaleTransformer = (tsX, tsY)=>{
+                  
+                  ghost.transform({scale : [tsX, tsY], ox, oy}, true);
+
+                  tween.el.transform(ghost.transform());
+                }
+
+                const anchorTransform = (val)=>{
+
+                  ghost._anchor = val; // save inside el's ghost
+
+                  if(this.config.updateAnchorCb) this.config.updateAnchorCb(tween.el, ghost._anchor)
+                }
+
+                /******************************** */
 
                 if (prop === "translateX") 
                 {
                   tween.el.transform(val);
-                  tween._ghost.transform(val);
+                  ghost.transform(val);
                 }
                 else if(prop === "translateY") // we make translateY additive
                 {
                   const ttY = val.decompose().translateY;
-                  let currentTY = tween._ghost.transform().translateY;
-                  
-                  tween._ghost.transform({translateY : ttY - currentTY}, true);
-
-                  tween.el.transform(tween._ghost.transform());
-                  
+                  translateYTransformer(ttY);
                 }
                 else if(prop === "anchor")
                 { 
-                  tween._ghost._anchor = val; // save inside el's ghost
-
-                  if(this.config.updateAnchorCb) this.config.updateAnchorCb(tween.el, tween._ghost._anchor)
+                  anchorTransform(val)
                 }
                 else if (Fluv.VALID_SCALE_ATTRIBUTES.includes(prop)) {
                     const tsX = val.decompose().scaleX;
                     const tsY = val.decompose().scaleY;
-                  
-                    tween._ghost.transform({scale : [tsX, tsY], ox, oy}, true);
 
-                    tween.el.transform(tween._ghost.transform());
+                    scaleTransformer(tsX, tsY)
+
                 } else if (prop === "rotate") {
-                    let curRot = tween._ghost.transform().rotate;
-                    const tarRot = val.decompose().rotate;
 
-                    tween._ghost.transform({rotate : tarRot - curRot, ox, oy}, true);
-                    
-                    tween.el.transform(tween._ghost.transform());
+                  const tarRot = val.decompose().rotate;
+                  rotateTransformer(tarRot);
                 }
+
+
+                /** _transalterersStates
+                 * This ensure we don't have a resetting effect of previous transform alterers (translateY, rotate, scale, anchor)
+                 * when we are left with only translateX tweens
+                 *  */ 
+                const transformers = { // IMPORTANT TO KEEP THE SAME ORDER THAN ABOVE
+                    translateY: translateYTransformer,
+                    anchor: anchorTransform,
+                    scaleX : scaleTransformer,
+                    scaleY : scaleTransformer,
+                    rotate: rotateTransformer,
+                  };
+
+                  if (!ghost._staticTranslateX) {
+                    Object.entries(transformers).forEach(([prop, transformer]) => {
+                      // Only apply if this specific property isn't currently being animated
+                      if (!this._tweensContainElementAnimation(elapsedTweens, tween.el, prop)) {
+                        const val = ghost._transalterersStates[prop]
+                        if(val)
+                        {
+                          if(Fluv.VALID_SCALE_ATTRIBUTES.includes(prop))
+                          {
+                            if(prop == "scaleX")
+                              transformer(val, 1)
+                            else
+                              transformer(1, val)
+                          }
+                          else
+                            transformer(val);
+                        }
+                      }
+                    });
+                  }
+
             }
             else if(prop == Fluv.PATH_TRANSFORMS.morphTo || prop == Fluv.PATH_TRANSFORMS.d)
             {
