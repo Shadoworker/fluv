@@ -1655,9 +1655,12 @@ const pathMorpherIns = new PathMorpher();
 
     _calculateStagger(delay, staggerArr, totalElements, index) {
       let [s, r, g] = staggerArr;
-      if (typeof s === "string" && s.includes("%")) s = (totalElements * parseInt(s)) / 100;
-      if (typeof r === "string" && r.includes("%")) r = (totalElements * parseInt(r)) / 100;
-      return index < s ? 0 : Math.floor((index - s) / r) * (delay+g);
+      if (typeof s === "string" && s.includes("%")) 
+        s = (totalElements * parseInt(s)) / 100;
+      if (typeof r === "string" && r.includes("%")) 
+        r = (totalElements * parseInt(r)) / 100;
+
+      return delay + (index < s ? 0 : Math.floor((index - s) / r) * (g));
     }
  
 }

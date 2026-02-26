@@ -156,6 +156,7 @@
             add.tspan('L')
             add.tspan('O')
         })
+        .font({size : 24, weight : 'bold'})
         .id("text")
         .translate(220, 50)
 
@@ -291,18 +292,23 @@
         };
 
         const textAnimations = {
-            targets: "#text",
-            translateX: [
-                { value: 220, duration: 1, delay: 0 },
-                // { value: 300, duration: 1000, delay: 0, easing: '-' },
-                { value: 340, duration: 1000, delay: 0, easing: "-" },
+            targets: "#text tspan",
+            // translateX: [
+            //     { value: 220, duration: 1, delay: 0 },
+            //     // { value: 300, duration: 1000, delay: 0, easing: '-' },
+            //     { value: 340, duration: 1000, delay: 0, easing: "-" },
+            // ],
+            y : [
+                { value: 10, duration: 1000, delay: 0, stagger : [0, 1 ,100], easing: '-' },
+                { value: 0, duration: 1000, delay: 1000, stagger : [0, 1 ,100], easing: '-' },
+                { value: 10, duration: 1000, delay: 2000, stagger : [0, 1 ,100], easing: '-' },
             ],
-            fill: [
-                // { value: "#ef6", duration: 500 },
-                // { value: "#00f", delay: 500, duration: 500 },
-                { value: 'rgba(255, 255, 255, 1)', duration: 1 },
-                { value: 'rgba(25, 105, 55, 1)', duration: 1000},
-            ],
+            // fill: [
+            //     // { value: "#ef6", duration: 500 },
+            //     // { value: "#00f", delay: 500, duration: 500 },
+            //     { value: 'rgba(0, 0, 0, 1)', duration: 1 },
+            //     { value: 'rgba(200, 5, 5, 1)', duration: 1000},
+            // ],
             // width : [
             //     { value: 15, duration: 1 },
             //     { value: 25, duration: 1000 },
@@ -379,7 +385,7 @@
         const fl = new Fluv({speed : 1});
         fl.add(nodeAnimations)
         // fl.add(rect2Animations)
-        // fl.add(textAnimations)
+        fl.add(textAnimations)
         fl.add(staggerElsNodeAnimations)
         // fl.add(shapeAnimations)
 
