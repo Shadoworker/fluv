@@ -428,6 +428,8 @@ class PathReshaper {
 const pathMorpherIns = new PathMorpher();
 
 
+ 
+
 /* export default */ class Fluv {
     static ANIMATBLES_ORDER = ["translateX", "translateY", "anchor", "scaleX", "scaleY", "rotate", "width", "height", "strokeDashoffset"];
     static VALID_TRANSFORMS = ['translateX', 'translateY', 'translateZ', 'rotate', 'rotateX', 'rotateY', 'rotateZ', 'scaleX', 'scaleY', 'anchor', 'anchorX', 'anchorY', 'skew', 'skewX', 'skewY', 'perspective', 'matrix', 'matrix3d'];
@@ -1080,14 +1082,27 @@ const pathMorpherIns = new PathMorpher();
                     }
  
                     // Add to prop tweens
-                    item.animatables[prop].push({
+                    const tween = {
                       el,
                       _ghost: ghost,
                       prop,
                       runner,
                       duration: step.duration || 0,
                       delay: finalDelay
-                    });
+                    };
+                    
+                    if(j == 0)
+                    {
+                      (ghost._initialTweens??=[]).push(tween)
+                    }
+
+                    if(j == steps.length-1)
+                    {
+                      (ghost._finalTweens??=[]).push(tween)
+                    }
+
+                    item.animatables[prop].push(tween);
+
 
 
                 });
@@ -1174,8 +1189,8 @@ const pathMorpherIns = new PathMorpher();
            * EXCEPTION: If we are seeking (!isPlaying), we MUST process staggered elements 
            * even before their delay to ensure their initial state is rendered correctly.
            */
-          const isPreDelay = elapsed < tween.delay || elapsed > tween.delay+tween.duration;
-          const shouldSkip = this.isPlaying ? isPreDelay : (isPreDelay && !tween.runner.staggered);
+          const isPreDelay = elapsed < tween.delay //|| elapsed > tween.delay+tween.duration;
+          const shouldSkip = this.isPlaying ? isPreDelay : (isPreDelay && tween.runner.staggered);
 
           if (!shouldSkip){
             elapsedTweens.push(tween);
@@ -1190,7 +1205,7 @@ const pathMorpherIns = new PathMorpher();
     _render(elapsed) {
 
         const elapsedTweens = this._getElapsedTweens(elapsed);
-
+        // console.log(elapsedTweens)
         const len = elapsedTweens.length;
 
         for (let i = 0; i < len; i++) {
@@ -1208,298 +1223,305 @@ const pathMorpherIns = new PathMorpher();
             }
             /********************************* */
 
+
             var localProgress = Math.max(0, Math.min(1, (elapsed - tween.delay) / (tween.duration || 1)));
             if (tween.prop == Fluv.EXTRAS_PROPERTIES.order && Math.abs(localProgress - 1) < Fluv.EPSILON)
                 localProgress = 1;
 
            
-            var val;
-            var prop = tween.prop;
+            this._animate(tween, elapsedTweens, localProgress)
             
-            if (!Object.keys(Fluv.PATH_TRANSFORMS).includes(prop) || prop == Fluv.PATH_TRANSFORMS.followPath) // Dont get value from runner directly for these types
-                val = tween.runner.at(localProgress);
-
-            if (Fluv.VALID_TRANSFORMS.includes(prop)) 
-            {
-                const ghost = tween._ghost;
-                // process eventual anchor point for transforms
-                const ox = ghost.bbox().x + ghost.bbox().width * ghost._anchor[0]
-                const oy = ghost.bbox().y + ghost.bbox().height * ghost._anchor[1]
-                //----------------------------------------------
-
-                /*************Transformers funcs************ */
-                const translateYTransformer = (val)=>{
-                  let currentTY = ghost.transform().translateY;
-                  
-                  ghost.transform({translateY : val - currentTY}, true);
-
-                  tween.el.transform(ghost.transform());
-                }
-
-                const rotateTransformer = (val)=>{
-
-                  let curRot = ghost.transform().rotate;
-
-                  ghost.transform({rotate : val - curRot, ox, oy}, true);
-                  
-                  tween.el.transform(ghost.transform());
-                }
-
-                const scaleTransformer = (tsX, tsY)=>{
-                  
-                  ghost.transform({scale : [tsX, tsY], ox, oy}, true);
-
-                  tween.el.transform(ghost.transform());
-                }
-
-                const anchorTransform = (val)=>{
-
-                  ghost._anchor = val; // save inside el's ghost
-
-                  if(this.config.updateAnchorCb) this.config.updateAnchorCb(tween.el, ghost._anchor)
-                }
-
-                /******************************** */
-
-                if (prop === "translateX") 
-                {
-                  tween.el.transform(val);
-                  ghost.transform(val);
-                }
-                else if(prop === "translateY") // we make translateY additive
-                {
-                  const ttY = val.decompose().translateY;
-                  translateYTransformer(ttY);
-                }
-                else if(prop === "anchor")
-                { 
-                  anchorTransform(val)
-                }
-                else if (Fluv.VALID_SCALE_ATTRIBUTES.includes(prop)) {
-                    const tsX = val.decompose().scaleX;
-                    const tsY = val.decompose().scaleY;
-
-                    scaleTransformer(tsX, tsY)
-
-                } else if (prop === "rotate") {
-
-                  const tarRot = val.decompose().rotate;
-                  rotateTransformer(tarRot);
-                }
-
-
-                /** _transalterersStates
-                 * This ensure we don't have a resetting effect of previous transform alterers (translateY, rotate, scale, anchor)
-                 * when we are left with only translateX tweens
-                 *  */ 
-                const transformers = { // IMPORTANT TO KEEP THE SAME ORDER THAN ABOVE
-                    translateY: translateYTransformer,
-                    anchor: anchorTransform,
-                    scaleX : scaleTransformer,
-                    scaleY : scaleTransformer,
-                    rotate: rotateTransformer,
-                  };
-
-                  if (!ghost._staticTranslateX) {
-                    Object.entries(transformers).forEach(([prop, transformer]) => {
-                      // Only apply if this specific property isn't currently being animated
-                      if (!this._tweensContainElementAnimation(elapsedTweens, tween.el, prop)) {
-                        const val = ghost._transalterersStates[prop]
-                        if(val)
-                        {
-                          if(Fluv.VALID_SCALE_ATTRIBUTES.includes(prop))
-                          {
-                            if(prop == "scaleX")
-                              transformer(val, 1)
-                            else
-                              transformer(1, val)
-                          }
-                          else
-                            transformer(val);
-                        }
-                      }
-                    });
-                  }
-
-            }
-            else if(prop == Fluv.PATH_TRANSFORMS.morphTo || prop == Fluv.PATH_TRANSFORMS.d)
-            {
-                const morph = tween.runner.interpolator(localProgress);
-                val = morph;
-                // Set attribute value
-                tween.el.attr({ 'd': val });
-            }
-            else if(prop == Fluv.PATH_TRANSFORMS.followPath)
-            {
-                const followValue = Fluv.utils.getFollowPathTweenValue(tween, val)
-
-                var 
-                pathCurrentTransform = followValue.transform, 
-                angle = followValue.angle, 
-                centered = followValue.centered, 
-                rotated = followValue.rotated;
-
-                var cx = tween.el.bbox().cx
-                var cy = tween.el.bbox().cy;
-
-                tween.el.transform(pathCurrentTransform);
-                
-                if(centered)
-                    tween.el.translate(-cx, -cy);
-
-                if(rotated)
-                {
-                  let curRot = tween.el.transform().rotate;
-                  const tarRot = angle;
-                  tween.el.rotate(tarRot - curRot);
-                }
-
-            }
-            else if(Object.keys(Fluv.COLOR_ATTRIBUTES).includes(prop))
-            {
-              if(prop == Fluv.COLOR_ATTRIBUTES.fill)
-              {
-                if(tween.runner.gradientType) // Set the color in the case of gradient value
-                {
-                  var gradientData = Fluv.utils.parseGradientArray(val);
-                  const gradientType = tween.runner.gradientType;
-                  
-                  Fluv.utils.setGradientElement(this, tween.el, Fluv.COLOR_ATTRIBUTES.fill, gradientType, gradientData.angle, gradientData.stops)
-                }
-                else // Solid color value
-                {
-                  var rgbaColor = `rgba(${val[0]},${val[1]},${val[2]},${val[3]})`
-                  val = rgbaColor;
-                  (tween.el.baseRefEl ? tween.el.baseRefEl() : tween.el).fill(val) 
-
-                }
-                // This set the reference for the initialValue to be used for the next tween
-                tween.el.baseFill ? tween.el.baseFill(null, val) : null; // in animation mode gradient id is not important
-            
-              }
-              else if(prop == Fluv.COLOR_ATTRIBUTES.stroke)
-              {
-                if(tween.runner.gradientType) // Set the color in the case of gradient value
-                {
-                  var gradientData = Fluv.utils.parseGradientArray(val);
-                  const gradientType = tween.runner.gradientType;
-                  
-                  Fluv.utils.setGradientElement(this, tween.el, Fluv.COLOR_ATTRIBUTES.stroke, gradientType, gradientData.angle, gradientData.stops)
-                }
-                else // Solid color value
-                {
-                  var rgbaColor = `rgba(${val[0]},${val[1]},${val[2]},${val[3]})`
-                  val = rgbaColor;
-                  tween.el.stroke({color : val}) 
-                }
-                // This set the reference for the initialValue to be used for the next tween
-                tween.el.baseStroke ? tween.el.baseStroke(null, val) : null; // in animation mode gradient id is not important
-              }
-            }
-            else if(Fluv.VALID_SIZE_ATTRIBUTES.includes(prop))
-            {
-                var box = tween.el.bbox();
-                box.width = prop == 'width' ? val : box.width;
-                box.height = prop == 'height' ? val : box.height;
-
-                if(tween.el.type == 'text')
-                {
-                    const fontStyle = {size : val}
-                    tween.el.font(fontStyle) 
-                } 
-                else // Anything else
-                {
-                    tween.el.size(box.width, box.height);
-                }
-            
-                /* This is another scope */
-                if(this.config.updateImagePatternCb)
-                    this.config.updateImagePatternCb(tween.el, box.width, box.height)
-                
-            }
-            else if(Object.keys(Fluv.EFFECTS_PROPERTIES).includes(prop)) // effect/filters
-            {
-                const params = tween.runner.params;
-                const { effectSelector,
-                        filterSelector,
-                        filterProperty } = params;
-
-                const effectEl = SVG.find(`${effectSelector}`)[0];
-                const propertyHandlerEl = effectEl?.findOne(filterSelector);
-
-                if(propertyHandlerEl)
-                {
-                  if(prop == Fluv.EFFECTS_PROPERTIES.effectColor && filterProperty == "flood-color")
-                  {
-                    var rgbaColor = `rgba(${val[0]},${val[1]},${val[2]},${val[3]})`
-                    val = rgbaColor;
-                  }
-
-                  propertyHandlerEl?.attr(filterProperty, val.toString());
-
-                }
-
-            }
-            else if(prop == Fluv.EXTRAS_PROPERTIES.borderRadius)
-            {
-              tween.el.radius(val);
-            }
-            else if(prop == Fluv.EXTRAS_PROPERTIES.order)
-            {
-              this.config.updateOrderCb ? this.config.updateOrderCb(tween.el, val, {progress : localProgress, params : tween.runner.params}) : null
-            }
-            else 
-            {
-              if(Object.keys(Fluv.STROKE_TRANSFORMS).includes(prop))
-              {
-                prop = Fluv.STROKE_TRANSFORMS[prop]; // Get valid attribute value
-                if(prop == Fluv.STROKE_TRANSFORMS.strokeDasharray)
-                  val = val.join(' ').trim()
-              
-              
-                if(prop == Fluv.STROKE_TRANSFORMS.strokeDashoffset)
-                {
-                  const percentValue = val; // save tweening value
-                  // Get the element dashoffset (numeric value)
-                  var dashoffsetLength = tween.runner.dashoffsetLength;
-                  // Get the dashoffset at each frame if one of the transform animation below exist (these change the element size, so dashoffsetLength)
-                  const targetSizeChanged = this._elementAnimationsContainProperties(tween.el, [...Fluv.VALID_SIZE_ATTRIBUTES, ...Fluv.VALID_SCALE_ATTRIBUTES])
-                  if(targetSizeChanged)
-                  {
-                      dashoffsetLength = Fluv.utils.getDashoffset(tween.el);
-                  }
-                  // Calculate the value according to the percentage sent
-                  val = dashoffsetLength * (percentValue / 100);
-
-                  /* Dashoffset works only if dasharray is set : if not exist set to the default value (i.e:full length)
-                  ** if targetSizeChanged also, we update the dasharray */
-                  if(!tween.el.attr(Fluv.STROKE_TRANSFORMS.strokeDasharray) || targetSizeChanged)
-                  {
-                      if(!tween.el.attr(Fluv.STROKE_TRANSFORMS.strokeDasharray))
-                      {
-                          this.dirtyProperties.add({el:tween.el, property: Fluv.STROKE_TRANSFORMS.strokeDasharray})
-                      }
-                      tween.el.attr({[Fluv.STROKE_TRANSFORMS.strokeDasharray] : dashoffsetLength})
-                  }
-                }
-              }
-
-              // Set attribute value
-              tween.el.attr({ [prop]: val });
-
-            }
-
-            // In order to reflect the new bbox on the ghost element
-            // Check for fail-cases (Geometry-altering properties)
-            if (Fluv.GEOMETRY_ALTERING_PROPERTIES.includes(prop))
-            {
-                // Apply on ghost
-                tween._ghost.attr({ [prop]: val }); 
-                // Only re-measure if we absolutely have to
-                const newBox = tween.el.bbox();
-                tween._ghost._bbox = newBox;
-            }
         }
+    }
+
+    _animate(tween, elapsedTweens, localProgress)
+    {
+      var val;
+      var prop = tween.prop;
+      
+      if (!Object.keys(Fluv.PATH_TRANSFORMS).includes(prop) || prop == Fluv.PATH_TRANSFORMS.followPath) // Dont get value from runner directly for these types
+          val = tween.runner.at(localProgress);
+
+      if (Fluv.VALID_TRANSFORMS.includes(prop)) 
+      {
+          const ghost = tween._ghost;
+          // process eventual anchor point for transforms
+          const ox = ghost.bbox().x + ghost.bbox().width * ghost._anchor[0]
+          const oy = ghost.bbox().y + ghost.bbox().height * ghost._anchor[1]
+          //----------------------------------------------
+
+          /*************Transformers funcs************ */
+          const translateYTransformer = (val)=>{
+            let currentTY = ghost.transform().translateY;
+            
+            ghost.transform({translateY : val - currentTY}, true);
+
+            tween.el.transform(ghost.transform());
+          }
+
+          const rotateTransformer = (val)=>{
+
+            let curRot = ghost.transform().rotate;
+
+            ghost.transform({rotate : val - curRot, ox, oy}, true);
+            
+            tween.el.transform(ghost.transform());
+          }
+
+          const scaleTransformer = (tsX, tsY)=>{
+            
+            ghost.transform({scale : [tsX, tsY], ox, oy}, true);
+
+            tween.el.transform(ghost.transform());
+          }
+
+          const anchorTransform = (val)=>{
+
+            ghost._anchor = val; // save inside el's ghost
+
+            if(this.config.updateAnchorCb) this.config.updateAnchorCb(tween.el, ghost._anchor)
+          }
+
+          /******************************** */
+
+          if (prop === "translateX") 
+          {
+            tween.el.transform(val);
+            ghost.transform(val);
+          }
+          else if(prop === "translateY") // we make translateY additive
+          {
+            const ttY = val.decompose().translateY;
+            translateYTransformer(ttY);
+          }
+          else if(prop === "anchor")
+          { 
+            anchorTransform(val)
+          }
+          else if (Fluv.VALID_SCALE_ATTRIBUTES.includes(prop)) {
+              const tsX = val.decompose().scaleX;
+              const tsY = val.decompose().scaleY;
+
+              scaleTransformer(tsX, tsY)
+
+          } else if (prop === "rotate") {
+
+            const tarRot = val.decompose().rotate;
+            rotateTransformer(tarRot);
+          }
+
+
+          /** _transalterersStates
+           * This ensure we don't have a resetting effect of previous transform alterers (translateY, rotate, scale, anchor)
+           * when we are left with only translateX tweens
+           *  */ 
+          const transformers = { // IMPORTANT TO KEEP THE SAME ORDER THAN ABOVE
+              translateY: translateYTransformer,
+              anchor: anchorTransform,
+              scaleX : scaleTransformer,
+              scaleY : scaleTransformer,
+              rotate: rotateTransformer,
+            };
+
+            if (!ghost._staticTranslateX) {
+              Object.entries(transformers).forEach(([prop, transformer]) => {
+                // Only apply if this specific property isn't currently being animated
+                if (!this._tweensContainElementAnimation(elapsedTweens, tween.el, prop)) {
+                  const val = ghost._transalterersStates[prop]
+                  if(val)
+                  {
+                    if(Fluv.VALID_SCALE_ATTRIBUTES.includes(prop))
+                    {
+                      if(prop == "scaleX")
+                        transformer(val, 1)
+                      else
+                        transformer(1, val)
+                    }
+                    else
+                      transformer(val);
+                  }
+                }
+              });
+            }
+
+      }
+      else if(prop == Fluv.PATH_TRANSFORMS.morphTo || prop == Fluv.PATH_TRANSFORMS.d)
+      {
+          const morph = tween.runner.interpolator(localProgress);
+          val = morph;
+          // Set attribute value
+          tween.el.attr({ 'd': val });
+      }
+      else if(prop == Fluv.PATH_TRANSFORMS.followPath)
+      {
+          const followValue = Fluv.utils.getFollowPathTweenValue(tween, val)
+
+          var 
+          pathCurrentTransform = followValue.transform, 
+          angle = followValue.angle, 
+          centered = followValue.centered, 
+          rotated = followValue.rotated;
+
+          var cx = tween.el.bbox().cx
+          var cy = tween.el.bbox().cy;
+
+          tween.el.transform(pathCurrentTransform);
+          
+          if(centered)
+              tween.el.translate(-cx, -cy);
+
+          if(rotated)
+          {
+            let curRot = tween.el.transform().rotate;
+            const tarRot = angle;
+            tween.el.rotate(tarRot - curRot);
+          }
+
+      }
+      else if(Object.keys(Fluv.COLOR_ATTRIBUTES).includes(prop))
+      {
+        if(prop == Fluv.COLOR_ATTRIBUTES.fill)
+        {
+          if(tween.runner.gradientType) // Set the color in the case of gradient value
+          {
+            var gradientData = Fluv.utils.parseGradientArray(val);
+            const gradientType = tween.runner.gradientType;
+            
+            Fluv.utils.setGradientElement(this, tween.el, Fluv.COLOR_ATTRIBUTES.fill, gradientType, gradientData.angle, gradientData.stops)
+          }
+          else // Solid color value
+          {
+            var rgbaColor = `rgba(${val[0]},${val[1]},${val[2]},${val[3]})`
+            val = rgbaColor;
+            (tween.el.baseRefEl ? tween.el.baseRefEl() : tween.el).fill(val) 
+
+          }
+          // This set the reference for the initialValue to be used for the next tween
+          tween.el.baseFill ? tween.el.baseFill(null, val) : null; // in animation mode gradient id is not important
+      
+        }
+        else if(prop == Fluv.COLOR_ATTRIBUTES.stroke)
+        {
+          if(tween.runner.gradientType) // Set the color in the case of gradient value
+          {
+            var gradientData = Fluv.utils.parseGradientArray(val);
+            const gradientType = tween.runner.gradientType;
+            
+            Fluv.utils.setGradientElement(this, tween.el, Fluv.COLOR_ATTRIBUTES.stroke, gradientType, gradientData.angle, gradientData.stops)
+          }
+          else // Solid color value
+          {
+            var rgbaColor = `rgba(${val[0]},${val[1]},${val[2]},${val[3]})`
+            val = rgbaColor;
+            tween.el.stroke({color : val}) 
+          }
+          // This set the reference for the initialValue to be used for the next tween
+          tween.el.baseStroke ? tween.el.baseStroke(null, val) : null; // in animation mode gradient id is not important
+        }
+      }
+      else if(Fluv.VALID_SIZE_ATTRIBUTES.includes(prop))
+      {
+          var box = tween.el.bbox();
+          box.width = prop == 'width' ? val : box.width;
+          box.height = prop == 'height' ? val : box.height;
+
+          if(tween.el.type == 'text')
+          {
+              const fontStyle = {size : val}
+              tween.el.font(fontStyle) 
+          } 
+          else // Anything else
+          {
+              tween.el.size(box.width, box.height);
+          }
+      
+          /* This is another scope */
+          if(this.config.updateImagePatternCb)
+              this.config.updateImagePatternCb(tween.el, box.width, box.height)
+          
+      }
+      else if(Object.keys(Fluv.EFFECTS_PROPERTIES).includes(prop)) // effect/filters
+      {
+          const params = tween.runner.params;
+          const { effectSelector,
+                  filterSelector,
+                  filterProperty } = params;
+
+          const effectEl = SVG.find(`${effectSelector}`)[0];
+          const propertyHandlerEl = effectEl?.findOne(filterSelector);
+
+          if(propertyHandlerEl)
+          {
+            if(prop == Fluv.EFFECTS_PROPERTIES.effectColor && filterProperty == "flood-color")
+            {
+              var rgbaColor = `rgba(${val[0]},${val[1]},${val[2]},${val[3]})`
+              val = rgbaColor;
+            }
+
+            propertyHandlerEl?.attr(filterProperty, val.toString());
+
+          }
+
+      }
+      else if(prop == Fluv.EXTRAS_PROPERTIES.borderRadius)
+      {
+        tween.el.radius(val);
+      }
+      else if(prop == Fluv.EXTRAS_PROPERTIES.order)
+      {
+        this.config.updateOrderCb ? this.config.updateOrderCb(tween.el, val, {progress : localProgress, params : tween.runner.params}) : null
+      }
+      else 
+      {
+        if(Object.keys(Fluv.STROKE_TRANSFORMS).includes(prop))
+        {
+          prop = Fluv.STROKE_TRANSFORMS[prop]; // Get valid attribute value
+          if(prop == Fluv.STROKE_TRANSFORMS.strokeDasharray)
+            val = val.join(' ').trim()
+        
+        
+          if(prop == Fluv.STROKE_TRANSFORMS.strokeDashoffset)
+          {
+            const percentValue = val; // save tweening value
+            // Get the element dashoffset (numeric value)
+            var dashoffsetLength = tween.runner.dashoffsetLength;
+            // Get the dashoffset at each frame if one of the transform animation below exist (these change the element size, so dashoffsetLength)
+            const targetSizeChanged = this._elementAnimationsContainProperties(tween.el, [...Fluv.VALID_SIZE_ATTRIBUTES, ...Fluv.VALID_SCALE_ATTRIBUTES])
+            if(targetSizeChanged)
+            {
+                dashoffsetLength = Fluv.utils.getDashoffset(tween.el);
+            }
+            // Calculate the value according to the percentage sent
+            val = dashoffsetLength * (percentValue / 100);
+
+            /* Dashoffset works only if dasharray is set : if not exist set to the default value (i.e:full length)
+            ** if targetSizeChanged also, we update the dasharray */
+            if(!tween.el.attr(Fluv.STROKE_TRANSFORMS.strokeDasharray) || targetSizeChanged)
+            {
+                if(!tween.el.attr(Fluv.STROKE_TRANSFORMS.strokeDasharray))
+                {
+                    this.dirtyProperties.add({el:tween.el, property: Fluv.STROKE_TRANSFORMS.strokeDasharray})
+                }
+                tween.el.attr({[Fluv.STROKE_TRANSFORMS.strokeDasharray] : dashoffsetLength})
+            }
+          }
+        }
+
+        // Set attribute value
+        tween.el.attr({ [prop]: val });
+
+      }
+
+      // In order to reflect the new bbox on the ghost element
+      // Check for fail-cases (Geometry-altering properties)
+      if (Fluv.GEOMETRY_ALTERING_PROPERTIES.includes(prop))
+      {
+          // Apply on ghost
+          tween._ghost.attr({ [prop]: val }); 
+          // Only re-measure if we absolutely have to
+          const newBox = tween.el.bbox();
+          tween._ghost._bbox = newBox;
+      }
     }
 
 
@@ -1521,7 +1543,7 @@ const pathMorpherIns = new PathMorpher();
     play(direction = 1, restart = false, reversing = false) {
 
         this.pause();
-        if(restart || (this.isCompleted && !reversing)) this._fullReset();
+        // if(restart || (this.isCompleted && !reversing)) this._fullReset();
         
         setTimeout(() => {
             
@@ -1559,8 +1581,8 @@ const pathMorpherIns = new PathMorpher();
                         this.pause();
                         if(this.lastElapsed == this.maxDuration) this.isCompleted = true;
 
-                        if(reversing && this.lastElapsed == 0)
-                          this._fullReset() // to enforce staggered element to return to their initial values
+                        // if(reversing && this.lastElapsed == 0)
+                        //   this._fullReset() // to enforce staggered element to return to their initial values
 
                         return;
                     }
@@ -1578,8 +1600,25 @@ const pathMorpherIns = new PathMorpher();
 
     }
  
+    _reinit(progress = 0)
+    {
+      for (let i = 0; i < this.animations.length; i++) {
+        const animation = this.animations[i];
+
+        const targetTweens = progress === 0 ? animation._ghost._initialTweens : animation._ghost._finalTweens;
+        
+        for (let j = 0; j < targetTweens.length; j++) {
+          const tween = targetTweens[j];
+
+          this._animate(tween, targetTweens, progress)
+
+        }
+      }
+    }
+
     restart()
     {
+      this._reinit(0)
       this.play(1, true)
     }
 
@@ -1589,6 +1628,7 @@ const pathMorpherIns = new PathMorpher();
     }
 
     reverse() {
+      this._reinit(1)
       this.play(-1, false, true);
     }
 

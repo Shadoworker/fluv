@@ -7,6 +7,7 @@
     <title>FLUV Test</title>
     <script src="../../svg.js"></script>
     <script src="../../svg.filter.js"></script>
+    <script src="../../../scale/awaTextRenderer.js"></script>
     <script src="./fluv.js"></script>
     <style>
         body {
@@ -91,7 +92,7 @@
 
     <div class="controls">
         <div class="btn-group">
-            <button class="btn-primary" onclick="fl.play(1)">
+            <button class="btn-primary" onclick="fl.restart()">
                 PLAY
             </button>
             <button class="btn-primary" onclick="fl.reverse()">REVERSE</button>
@@ -149,16 +150,35 @@
         .translate(80, 175)
 
         /******************TEXT********************/
-        var text = draw.text(function(add) {
-            add.tspan('H')
-            add.tspan('E')
-            add.tspan('L')
-            add.tspan('L')
-            add.tspan('O')
-        })
-        .font({size : 24, weight : 'bold'})
-        .id("text")
-        .translate(220, 50)
+        // var text = draw.text(function(add) {
+        //     add.tspan('H')
+        //     add.tspan('E')
+        //     add.tspan('L')
+        //     add.tspan('L')
+        //     add.tspan('O')
+        // })
+        // .font({size : 24, weight : 'bold'})
+        // .id("text")
+        // .translate(220, 50)
+
+
+
+        const transform = new SVG.Matrix().translate(100, 50)
+
+        const textRenderer = new AwaTextRenderer(draw, draw.group(), {
+            value: 'Text',
+            fontFamily: "Arial",
+
+        transform: transform,
+        // segments : f.node.segments
+        }, {rerender : true});
+
+        const createdElement = textRenderer.textLayer;
+        createdElement.id('textLayer')
+        const useElement = draw.use(createdElement);
+        const defs = draw.defs()
+        defs.add(createdElement)
+
 
         /*******************PATH*********************/
         // const diamondPath = "M40 0 L80 40 L40 80 L0 40 Z";
@@ -191,7 +211,7 @@
             .rect(radius, radius)
             .translate(startX + i * spacing, centerY)
             .fill("#10b981")
-            .rotate(45)
+            // .rotate(45)
             .addClass("stagger-el"); // Add the class for your TimelineEx to find
         }
 
@@ -292,7 +312,8 @@
         };
 
         const textAnimations = {
-            targets: "#text tspan",
+            targets: "#textLayer #seg-0 tspan",
+            // targets: "#text tspan",
             // translateX: [
             //     { value: 220, duration: 1, delay: 0 },
             //     // { value: 300, duration: 1000, delay: 0, easing: '-' },
@@ -301,7 +322,7 @@
             y : [
                 { value: 10, duration: 1000, delay: 0, stagger : [0, 1 ,100], easing: '-' },
                 { value: 0, duration: 1000, delay: 1000, stagger : [0, 1 ,100], easing: '-' },
-                { value: 10, duration: 1000, delay: 2000, stagger : [0, 1 ,100], easing: '-' },
+                // { value: 10, duration: 1000, delay: 2000, stagger : [0, 1 ,100], easing: '-' },
             ],
             // fill: [
             //     // { value: "#ef6", duration: 500 },
@@ -318,16 +339,16 @@
         const staggerElsNodeAnimations = {
             targets: ".stagger-el",
             translateY: [
-                // { value: 95.85, duration: 1, delay: [0, 1 ,100] },
-                { value: 125, duration: 1000, delay: 0, stagger : [0, 1 ,100], easing : 'easeOutCirc' },
+                // { value: 95.857, duration: 1, delay: 0 },
+                { value: 125, duration: 1000, delay: 0, stagger : [0, 1 ,100] },
             ],
             
             rotate: [
-                { value: 0, duration: 1 },
-                { value: 90, duration: 600, delay : 0, stagger : [0, 1 ,100] /* easing : 'easeOutElastic' */ },
+                // { value: 0, duration: 1 },
+                { value: 90, duration: 1000, delay : 0, stagger : [0, 1 ,100] /* easing : 'easeOutElastic' */ },
             ],
             fill: [
-                { value: 'rgba(255, 255, 255, 1)', duration: 1 },
+                // { value: 'rgba(255, 255, 255, 1)', duration: 1 },
                 { value: 'rgba(25, 105, 55, 1)', duration: 600, delay: 0, stagger : [0, 1 ,100] },
             ],
         };
@@ -382,61 +403,76 @@
         // INITIALIZATOR
 
         // 1. Initialize
-        const fl = new Fluv({speed : 1});
-        fl.add(nodeAnimations)
-        // fl.add(rect2Animations)
-        fl.add(textAnimations)
-        fl.add(staggerElsNodeAnimations)
-        // fl.add(shapeAnimations)
 
-        // 2. UI
-        const seeker = document.querySelector("#seeker");
-        const status = document.querySelector("#status");
+        var fl;
 
-        function update()
-        {
-            // console.log(fl.progress)
-            if (seeker)
-                seeker.value = fl.progress;
-            if (status)
-                status.innerText = `Time: ${Math.round(fl.maxDuration*fl.progress/100)}ms / ${fl.maxDuration}ms`;
-        }
+        setTimeout(() => {
+            
+            fl = new Fluv({speed : 1});
+            // fl.add(nodeAnimations)
+            // fl.add(rect2Animations)
+            fl.add(textAnimations)
+            fl.add(staggerElsNodeAnimations)
+            // fl.add(shapeAnimations)
+    
+            // 2. UI
+            const seeker = document.querySelector("#seeker");
+            const status = document.querySelector("#status");
+    
 
-        function complete()
-        {
-            console.log(
-                "%c %c FLUV %c DONE %c ",
-                "background: #444; padding: 2px 0;",
-                "background: #f06; color: white; padding: 2px; font-weight: bold; border-radius: 4px 0 0 4px;",
-                "background: #2c2c2c; color: #f06; padding: 2px; font-weight: bold; border-radius: 0 4px 4px 0; border: 1px solid #f06;",
-                "background: #444; padding: 2px 0;"
-            );
-        }
+            function update()
+            {
+                // console.log(fl.progress)
+                if (seeker)
+                    seeker.value = fl.progress;
+                if (status)
+                    status.innerText = `Time: ${Math.round(fl.maxDuration*fl.progress/100)}ms / ${fl.maxDuration}ms`;
+            }
+    
+            function complete()
+            {
+                console.log(
+                    "%c %c FLUV %c DONE %c ",
+                    "background: #444; padding: 2px 0;",
+                    "background: #f06; color: white; padding: 2px; font-weight: bold; border-radius: 4px 0 0 4px;",
+                    "background: #2c2c2c; color: #f06; padding: 2px; font-weight: bold; border-radius: 0 4px 4px 0; border: 1px solid #f06;",
+                    "background: #444; padding: 2px 0;"
+                );
+            }
+    
+            function updateAnchor(el, anchor)
+            {
+                const ox = el.bbox().x + el.bbox().width * anchor[0]
+                const oy = el.bbox().y + el.bbox().height * anchor[1]
+    
+                const tr = el.transform()
+    
+    
+                rectAnchor.transform({ translate : [
+                    tr.translateX + ox - rectAnchorRadius/2,
+                    tr.translateY + oy - rectAnchorRadius/2
+                ] }, false)
+            }
+    
+            fl.config.onUpdate = update;
+            fl.config.onComplete = complete;
+            fl.config.updateAnchorCb = updateAnchor;
+     
+            // Seeker timeline
+            if (seeker) {
+                seeker.addEventListener("input", (e) =>{
 
-        function updateAnchor(el, anchor)
-        {
-            const ox = el.bbox().x + el.bbox().width * anchor[0]
-            const oy = el.bbox().y + el.bbox().height * anchor[1]
+                    fl.seek(parseInt(e.target.value))
+                }
 
-            const tr = el.transform()
+                );
+            }
 
 
-            rectAnchor.transform({ translate : [
-                tr.translateX + ox - rectAnchorRadius/2,
-                tr.translateY + oy - rectAnchorRadius/2
-            ] }, false)
-        }
+            // fl._fullReset(100)
+            // fl.seek(100)
 
-        fl.config.onUpdate = update;
-        fl.config.onComplete = complete;
-        fl.config.updateAnchorCb = updateAnchor;
-
-        // Seeker timeline
-        if (seeker) {
-            seeker.addEventListener("input", (e) =>
-                fl.seek(parseInt(e.target.value)),
-            );
-        }
+        }, 1000);
 
     </script>
 </body>
