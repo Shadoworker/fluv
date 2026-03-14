@@ -439,7 +439,7 @@ const pathMorpherIns = new PathMorpher();
     static PATH_TRANSFORMS = {'followPath' : 'followPath', 'morphTo' : 'morphTo', 'd': 'd'};
     static STROKE_TRANSFORMS = {'strokeWidth': 'stroke-width' ,'strokeDasharray' : 'stroke-dasharray', 'strokeDashoffset':'stroke-dashoffset'};
     static EFFECTS_PROPERTIES = {"effectX" : "effectX", "effectY" : "effectY", "effectBlur" : "effectBlur", "effectColor" : "effectColor"};
-    static EXTRAS_PROPERTIES = {"borderRadius" : "borderRadius", "order" : "order"};
+    static EXTRAS_PROPERTIES = {"borderRadius" : "borderRadius", "maskedBy" : "maskedBy", "maskType" : "maskType"};
 
     static GEOMETRY_ALTERING_PROPERTIES = ['d', 'points', 'text'];
 
@@ -499,6 +499,12 @@ const pathMorpherIns = new PathMorpher();
             return Math.PI * 2 * el.attr('r');
         },
 
+        getEllipseLength(el) {
+          const a = parseFloat(el.attr("rx")) || 0;
+          const b = parseFloat(el.attr("ry")) || 0;
+          return Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
+        },
+
         getRectLength(el) {
             return (el.attr('width') * 2) + (el.attr('height') * 2);
         },
@@ -531,7 +537,7 @@ const pathMorpherIns = new PathMorpher();
         getTotalLength(el) {
             if (el.node.getTotalLength) return el.node.getTotalLength();
             switch(el.type) {
-                case 'circle': return Fluv.utils.getCircleLength(el);
+                case 'ellipse': return Fluv.utils.getEllipseLength(el);
                 case 'rect': return Fluv.utils.getRectLength(el);
                 case 'line': return Fluv.utils.getLineLength(el);
                 case 'polyline': return Fluv.utils.getPolylineLength(el);
@@ -539,38 +545,30 @@ const pathMorpherIns = new PathMorpher();
             }
         },
 
-        getFollowPathTweenValue(followPathTween, progress)
-        { 
-            const runner = followPathTween.runner;
-            const path = followPathTween.runner.followedPath;
-            var centered = runner.params.centered; // Whether the element is centered on path or not
-            var rotated = runner.params.rotated; // Whether the element must be rotated or not
-            
-            function point(offset = 0) 
-            {
-                const l = progress + offset >= 1 ? progress + offset : 0;
-                return path.node.getPointAtLength(l);
-            }
-            
-            var p = point();
-            const p0 = point(-1);
-            const p1 = point(+1);
-            var angle = Math.atan2(p1.y - p0.y, p1.x - p0.x) * 180 / Math.PI;
+        getFollowPathTweenValue(followPathTween, progress) {
+          const runner = followPathTween.runner;
+          const path = runner.followedPath;
+          const centered = runner.params.centered;
+          const rotated = runner.params.rotated;
 
-            // Create _followghost just once ... and update its properties on need
-            if(!path._followghost) path._followghost = path.clone();
-            path._followghost._bbox = path.bbox();
-            path._followghost.transform(path.transform());
-            path._followghost.bbox = () => {return path._followghost._bbox} // Override bbox() method to avoid appending of element to the dom
+          // Get the path's CTM (current transformation matrix) to map local → screen coords
+          const ctm = path.node.getCTM();
 
+          function point(offset = 0) {
+              const l = progress + offset >= 1 ? progress + offset : 0;
+              const p = path?.node.getPointAtLength(l);
+              // Map through CTM to account for path's rotation/transform
+              const mapped = p.matrixTransform(ctm);
+              return mapped;
+          }
 
-            path._followghost.translate(p.x, p.y)
-            const pathTransform = path._followghost.transform();
+          const p  = point();
+          const p0 = point(-1);
+          const p1 = point(+1);
+          const angle = Math.atan2(p1.y - p0.y, p1.x - p0.x) * 180 / Math.PI;
 
-            return {transform : pathTransform, angle : angle, rotated, centered }
-         
+          return { x: p.x, y: p.y, angle, rotated, centered };
         },
-
 
         hexToRgba(hex) {
           // remove invalid characters
@@ -705,7 +703,8 @@ const pathMorpherIns = new PathMorpher();
         {
             var _elemId = el.id();
 
-            var svgInstance = el.node.ownerSVGElement.instance;
+            const svgInstance = el.node.ownerSVGElement.instance;
+            const awaInstance = svgInstance.awaInstance;
  
             var gradientId = `${_elemId}-${_baseColorType}-gradient`; // Default gradient id
             if(flInstance.config.gradientIdCb)
@@ -713,10 +712,14 @@ const pathMorpherIns = new PathMorpher();
 
             var gradient = svgInstance.findOne(`#${gradientId}`);
 
-            if(gradient) gradient.remove();
-
+            if(gradient)
+            { 
+              const gradientParent = gradient.parent();
+              gradient.remove();
+              if(gradientParent.children().lenght == 0) gradientParent.remove();
+            };
                 
-            gradient = svgInstance.gradient(_gradientType).attr({id : gradientId});
+            gradient = awaInstance.getActiveSceneContainer().gradient(_gradientType).attr({id : gradientId});
 
             for (let i = 0; i < _stopPoints.length; i++)
             {
@@ -752,11 +755,39 @@ const pathMorpherIns = new PathMorpher();
             return gradientId;
 
         },
+
+        formatGradientToCSS(type, data) {
+          // 1. Format the stops into "rgba(r,g,b,a) offset%"
+          const stopStrings = data.stops.map(s => {
+              // Ensure offset is a percentage string
+              const offset = typeof s.offset === 'string' && s.offset.includes('%') 
+                  ? s.offset 
+                  : (parseFloat(s.offset)) + "%";
+              
+              return `${s.color} ${offset}`;
+          }).join(', ');
+
+          // 2. Handle Linear Type
+          if (type === 'linear') {
+              // CSS expects "deg", defaulting to 180 (top to bottom) if missing
+              const angle = data.angle || 180;
+              return `linear-gradient(${angle}deg, ${stopStrings})`;
+          }
+
+          // 3. Handle Radial Type
+          if (type === 'radial') {
+              // We use 'circle at center' to match standard SVG radial behavior
+              // You can extend this to use data.cx/cy if your object has them
+              return `radial-gradient(circle, ${stopStrings})`;
+          }
+
+          return '';
+      },
  
 
     }
 
-    constructor(options = {duration : null, easing : 'linear', loop: false, autoplay : false, delay : 0, managedState : false, update : null, complete : null, gradientIdCb : null, gradientSetterCb : null, updateImagePatternCb : null, getManagedState : null, updateAnchorCb : null, updateOrderCb : null}) {
+    constructor(options = {duration : null, easing : 'linear', loop: false, autoplay : false, delay : 0, managedState : false, update : null, complete : null, gradientIdCb : null, gradientSetterCb : null, updateImagePatternCb : null, getManagedState : null, updateAnchorCb : null, updateMaskedByCb : null, updateMaskTypeCb : null}) {
         this.animations = [];
         this._allTweens = [];
         // Options
@@ -778,7 +809,8 @@ const pathMorpherIns = new PathMorpher();
             updateImagePatternCb : options.updateImagePatternCb || null, // cb to update the rect-as-image-holder element's pattern image
             getManagedState : options.getManagedState || null, // cb to get the managed state of a given el's property
             updateAnchorCb : options.updateAnchorCb || null, // cb to handle what happen to our element (visually?) when the anchor is animated
-            updateOrderCb : options.updateOrderCb || null, // cb to handle element' order updating
+            updateMaskedByCb : options.updateMaskedByCb || null, // cb to handle element' maskedBy updating
+            updateMaskTypeCb : options.updateMaskTypeCb || null, // cb to handle element' maskType updating
             
           };
 
@@ -841,12 +873,13 @@ const pathMorpherIns = new PathMorpher();
                 const steps = data[prop];
 
                 steps?.forEach((step, j) => {
-                    const localDelay = Array.isArray(step.stagger) 
-                        ? this._calculateStagger(step.delay || 0, step.stagger, elements.length, i)
-                        : (step.delay || 0);
+                     const timings = Array.isArray(step.stagger) 
+                        ? this._calculateStagger(step.delay || 0, step.stagger, elements.length, i, step.duration)
+                        : [(step.delay || 0), 0];
                     
                     // Add global timeline delay
-                    const finalDelay = localDelay + this.config.delay;
+                    const finalDelay = timings[0] + this.config.delay;
+                    const stepDuration = step.duration - timings[1];
 
                     var runner = new SVG.Morphable();
                     if(!Object.keys(Fluv.COLOR_ATTRIBUTES).includes(prop))
@@ -990,7 +1023,7 @@ const pathMorpherIns = new PathMorpher();
                         const followedPathId = finalValue;
                         const followedPath = SVG.find(followedPathId)[0];
                         if(!followedPath) return;
-                        const pathTotalLength = followedPath.node.getTotalLength();
+                        const pathTotalLength = Fluv.utils.getDashoffset(followedPath)
 
                         finalValue = pathTotalLength;
 
@@ -1001,7 +1034,6 @@ const pathMorpherIns = new PathMorpher();
                           runner.from(finalValue)
                           finalValue = 0;
                         }
-
 
                         runner.followedPath = followedPath;
                         runner.params = {centered : step.params?.centered||false,rotated : step.params?.rotated||false, reversed : step.params?.reversed||false}
@@ -1015,6 +1047,8 @@ const pathMorpherIns = new PathMorpher();
 
                         const params = step.params;
                         const { effectSelector, filterSelector, filterProperty } = params;
+                    
+                        runner.params = params;
                         
                         if(!this.config.managedState)
                         {
@@ -1087,7 +1121,7 @@ const pathMorpherIns = new PathMorpher();
                       _ghost: ghost,
                       prop,
                       runner,
-                      duration: step.duration || 0,
+                      duration: stepDuration,
                       delay: finalDelay
                     };
                     
@@ -1174,33 +1208,19 @@ const pathMorpherIns = new PathMorpher();
 
 
     // Gets the tweens for this specific time
-    _getElapsedTweens(elapsed)
-    {
-      const tweens = [...this._allTweens];
-      const len = tweens.length;
+  _getElapsedTweens(elapsed) {
+    const map = new Map();
 
-      const elapsedTweens = [];
+    for (const tween of this._allTweens) {
+      const started = elapsed >= tween.delay;
+      if (this.isPlaying && !started) continue;
 
-      for (let i = 0; i < len; i++) {
-          const tween = tweens[i];
-
-          /** * PERFORMANCE GATE: 
-           * We skip the heavy runner calculation if the playhead hasn't reached the tween's delay yet.
-           * EXCEPTION: If we are seeking (!isPlaying), we MUST process staggered elements 
-           * even before their delay to ensure their initial state is rendered correctly.
-           */
-          const isPreDelay = elapsed < tween.delay //|| elapsed > tween.delay+tween.duration;
-          const shouldSkip = this.isPlaying ? isPreDelay : (isPreDelay && tween.runner.staggered);
-
-          if (!shouldSkip){
-            elapsedTweens.push(tween);
-          };
-          
-          /************************************************** */
-      }
-
-      return elapsedTweens;
+      const key = `${tween.el.id()}_${tween.prop}`;
+      if (started || !map.has(key)) map.set(key, tween);
     }
+
+    return [...map.values()];
+  }
 
     _render(elapsed) {
 
@@ -1225,9 +1245,6 @@ const pathMorpherIns = new PathMorpher();
 
 
             var localProgress = Math.max(0, Math.min(1, (elapsed - tween.delay) / (tween.duration || 1)));
-            if (tween.prop == Fluv.EXTRAS_PROPERTIES.order && Math.abs(localProgress - 1) < Fluv.EPSILON)
-                localProgress = 1;
-
            
             this._animate(tween, elapsedTweens, localProgress)
             
@@ -1236,6 +1253,8 @@ const pathMorpherIns = new PathMorpher();
 
     _animate(tween, elapsedTweens, localProgress)
     {
+      const el = tween.el;
+      const ghost = tween._ghost;
       var val;
       var prop = tween.prop;
       
@@ -1244,7 +1263,6 @@ const pathMorpherIns = new PathMorpher();
 
       if (Fluv.VALID_TRANSFORMS.includes(prop)) 
       {
-          const ghost = tween._ghost;
           // process eventual anchor point for transforms
           const ox = ghost.bbox().x + ghost.bbox().width * ghost._anchor[0]
           const oy = ghost.bbox().y + ghost.bbox().height * ghost._anchor[1]
@@ -1256,7 +1274,7 @@ const pathMorpherIns = new PathMorpher();
             
             ghost.transform({translateY : val - currentTY}, true);
 
-            tween.el.transform(ghost.transform());
+            el.transform(ghost.transform());
           }
 
           const rotateTransformer = (val)=>{
@@ -1265,14 +1283,14 @@ const pathMorpherIns = new PathMorpher();
 
             ghost.transform({rotate : val - curRot, ox, oy}, true);
             
-            tween.el.transform(ghost.transform());
+            el.transform(ghost.transform());
           }
 
           const scaleTransformer = (tsX, tsY)=>{
             
             ghost.transform({scale : [tsX, tsY], ox, oy}, true);
 
-            tween.el.transform(ghost.transform());
+            el.transform(ghost.transform());
           }
 
           const anchorTransform = (val)=>{
@@ -1286,7 +1304,7 @@ const pathMorpherIns = new PathMorpher();
 
           if (prop === "translateX") 
           {
-            tween.el.transform(val);
+            el.transform(val);
             ghost.transform(val);
           }
           else if(prop === "translateY") // we make translateY additive
@@ -1350,33 +1368,20 @@ const pathMorpherIns = new PathMorpher();
           const morph = tween.runner.interpolator(localProgress);
           val = morph;
           // Set attribute value
-          tween.el.attr({ 'd': val });
+          el.attr({ 'd': val });
       }
-      else if(prop == Fluv.PATH_TRANSFORMS.followPath)
-      {
-          const followValue = Fluv.utils.getFollowPathTweenValue(tween, val)
+      else if (prop == Fluv.PATH_TRANSFORMS.followPath) {
+        const { x, y, angle, centered, rotated } = Fluv.utils.getFollowPathTweenValue(tween, val);
 
-          var 
-          pathCurrentTransform = followValue.transform, 
-          angle = followValue.angle, 
-          centered = followValue.centered, 
-          rotated = followValue.rotated;
+        const cx = centered ? el.bbox().cx : 0;
+        const cy = centered ? el.bbox().cy : 0;
 
-          var cx = tween.el.bbox().cx
-          var cy = tween.el.bbox().cy;
+        el.transform({ translateX: x - cx, translateY: y - cy });
 
-          tween.el.transform(pathCurrentTransform);
-          
-          if(centered)
-              tween.el.translate(-cx, -cy);
-
-          if(rotated)
-          {
-            let curRot = tween.el.transform().rotate;
-            const tarRot = angle;
-            tween.el.rotate(tarRot - curRot);
-          }
-
+        if (rotated) {
+            const curRot = el.transform().rotate;
+            el.rotate(angle - curRot);
+        }
       }
       else if(Object.keys(Fluv.COLOR_ATTRIBUTES).includes(prop))
       {
@@ -1388,16 +1393,18 @@ const pathMorpherIns = new PathMorpher();
             const gradientType = tween.runner.gradientType;
             
             Fluv.utils.setGradientElement(this, tween.el, Fluv.COLOR_ATTRIBUTES.fill, gradientType, gradientData.angle, gradientData.stops)
+
+            val = Fluv.utils.formatGradientToCSS(gradientType, gradientData)
           }
           else // Solid color value
           {
             var rgbaColor = `rgba(${val[0]},${val[1]},${val[2]},${val[3]})`
             val = rgbaColor;
-            (tween.el.baseRefEl ? tween.el.baseRefEl() : tween.el).fill(val) 
+            (el.baseRefEl ? el.baseRefEl() : tween.el).fill(val) 
 
           }
           // This set the reference for the initialValue to be used for the next tween
-          tween.el.baseFill ? tween.el.baseFill(null, val) : null; // in animation mode gradient id is not important
+          el.baseFill ? el.baseFill(null, val) : null; // in animation mode gradient id is not important
       
         }
         else if(prop == Fluv.COLOR_ATTRIBUTES.stroke)
@@ -1408,31 +1415,33 @@ const pathMorpherIns = new PathMorpher();
             const gradientType = tween.runner.gradientType;
             
             Fluv.utils.setGradientElement(this, tween.el, Fluv.COLOR_ATTRIBUTES.stroke, gradientType, gradientData.angle, gradientData.stops)
+
+            val = Fluv.utils.formatGradientToCSS(gradientType, gradientData)
           }
           else // Solid color value
           {
             var rgbaColor = `rgba(${val[0]},${val[1]},${val[2]},${val[3]})`
             val = rgbaColor;
-            tween.el.stroke({color : val}) 
+            el.stroke({color : val}) 
           }
           // This set the reference for the initialValue to be used for the next tween
-          tween.el.baseStroke ? tween.el.baseStroke(null, val) : null; // in animation mode gradient id is not important
+          el.baseStroke ? el.baseStroke(null, val) : null; // in animation mode gradient id is not important
         }
       }
       else if(Fluv.VALID_SIZE_ATTRIBUTES.includes(prop))
       {
-          var box = tween.el.bbox();
+          var box = el.bbox();
           box.width = prop == 'width' ? val : box.width;
           box.height = prop == 'height' ? val : box.height;
 
-          if(tween.el.type == 'text')
+          if(el.type == 'text')
           {
               const fontStyle = {size : val}
-              tween.el.font(fontStyle) 
+              el.font(fontStyle) 
           } 
           else // Anything else
           {
-              tween.el.size(box.width, box.height);
+            el.size(box.width, box.height);
           }
       
           /* This is another scope */
@@ -1465,11 +1474,15 @@ const pathMorpherIns = new PathMorpher();
       }
       else if(prop == Fluv.EXTRAS_PROPERTIES.borderRadius)
       {
-        tween.el.radius(val);
+        el.radius(val);
       }
-      else if(prop == Fluv.EXTRAS_PROPERTIES.order)
+      else if(prop == Fluv.EXTRAS_PROPERTIES.maskedBy)
       {
-        this.config.updateOrderCb ? this.config.updateOrderCb(tween.el, val, {progress : localProgress, params : tween.runner.params}) : null
+        this.config.updateMaskedByCb ? this.config.updateMaskedByCb(tween.el, val, {progress : localProgress, params : tween.runner.params}) : null
+      }
+      else if(prop == Fluv.EXTRAS_PROPERTIES.maskType)
+      {
+        this.config.updateMaskTypeCb ? this.config.updateMaskTypeCb(tween.el, val, {progress : localProgress, params : tween.runner.params}) : null
       }
       else 
       {
@@ -1496,19 +1509,19 @@ const pathMorpherIns = new PathMorpher();
 
             /* Dashoffset works only if dasharray is set : if not exist set to the default value (i.e:full length)
             ** if targetSizeChanged also, we update the dasharray */
-            if(!tween.el.attr(Fluv.STROKE_TRANSFORMS.strokeDasharray) || targetSizeChanged)
+            if(!el.attr(Fluv.STROKE_TRANSFORMS.strokeDasharray) || targetSizeChanged)
             {
-                if(!tween.el.attr(Fluv.STROKE_TRANSFORMS.strokeDasharray))
+                if(!el.attr(Fluv.STROKE_TRANSFORMS.strokeDasharray))
                 {
                     this.dirtyProperties.add({el:tween.el, property: Fluv.STROKE_TRANSFORMS.strokeDasharray})
                 }
-                tween.el.attr({[Fluv.STROKE_TRANSFORMS.strokeDasharray] : dashoffsetLength})
+                el.attr({[Fluv.STROKE_TRANSFORMS.strokeDasharray] : dashoffsetLength})
             }
           }
         }
 
-        // Set attribute value
-        tween.el.attr({ [prop]: val });
+        // Set attribute value : special case for opacity
+        (prop == "opacity" ? el.baseRefEl ? el.baseRefEl().parent() : el : el).attr({ [prop]: val });
 
       }
 
@@ -1540,11 +1553,12 @@ const pathMorpherIns = new PathMorpher();
     }
 
 
-    play(direction = 1, restart = false, reversing = false) {
+    play(direction = 1) {
 
         this.pause();
-        // if(restart || (this.isCompleted && !reversing)) this._fullReset();
-        
+
+        if(this.progress == 0 || this.isCompleted) this._reinit(0)
+
         setTimeout(() => {
             
             this._cleanDirtyProperties();
@@ -1607,7 +1621,7 @@ const pathMorpherIns = new PathMorpher();
 
         const targetTweens = progress === 0 ? animation._ghost._initialTweens : animation._ghost._finalTweens;
         
-        for (let j = 0; j < targetTweens.length; j++) {
+        for (let j = 0; j < targetTweens?.length; j++) {
           const tween = targetTweens[j];
 
           this._animate(tween, targetTweens, progress)
@@ -1693,16 +1707,16 @@ const pathMorpherIns = new PathMorpher();
       return result;
     }
 
-    _calculateStagger(delay, staggerArr, totalElements, index) {
+    _calculateStagger(delay, staggerArr, totalElements, index, totalDuration) {
       let [s, r, g] = staggerArr;
-      if (typeof s === "string" && s.includes("%")) 
-        s = (totalElements * parseInt(s)) / 100;
-      if (typeof r === "string" && r.includes("%")) 
-        r = (totalElements * parseInt(r)) / 100;
 
-      return delay + (index < s ? 0 : Math.floor((index - s) / r) * (g));
+      if (typeof s === "string") s = (totalElements * parseInt(s)) / 100;
+      if (typeof r === "string") r = (totalElements * parseInt(r)) / 100;
+      const step = totalDuration * (g / 100);
+      const segWidth = step / Math.round(totalElements / r);
+      const relIndex = Math.floor((index - s) / r);
+      return [Math.ceil(delay + segWidth * relIndex), Math.ceil(step - segWidth)];
     }
- 
 }
 
 
