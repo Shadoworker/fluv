@@ -121,11 +121,11 @@
         window.draw = draw;
 
 
-        const ellipse = draw.ellipse(150, 50)
+        const ellipse = draw.ellipse(350, 100)
         .id('ellipse')
         .fill('none')
         .stroke({width : 3, color : '#000'})
-        .translate(250, 150)
+        .translate(150, 100)
         .rotate(-45)
 
 
@@ -151,6 +151,14 @@
         .fill("#a39")
         .stroke({color : "#000", width : 0})
         .translate(250, 230)
+        .radius(4)
+
+        
+        const rect3 = draw.rect(40, 30)
+        .id("svg-el3")
+        .fill("#af8")
+        .stroke({color : "#000", width : 0})
+        .translate(100, 30)
         .radius(4)
  
         
@@ -409,8 +417,17 @@
             //     { value: 90, duration: 600, delay : 0},
             // ],
             followPath: [
-                { value: "#ellipse", duration: 1000, delay : 0, params : {centered : true, rotated : true}},
+                { value: "#ellipse", duration: 3000, delay : 0, params : {centered : true, rotated : true}},
             ]
+        }
+
+         const rect3Animations = {
+            targets : "#svg-el3",
+            visible: [
+                { value: 0, duration: 0, delay: 0 , steps : 1},
+                { value: 1, duration: 1000, delay: 0, steps : 1 },
+            ],
+            
         }
 
         // INITIALIZATOR
@@ -424,6 +441,7 @@
             fl = new Fluv({speed : 1});
             fl.add(nodeAnimations)
             fl.add(rect2Animations)
+            fl.add(rect3Animations)
             fl.add(textAnimations)
             // fl.add(staggerElsNodeAnimations)
             // fl.add(shapeAnimations)
@@ -435,7 +453,6 @@
 
             function update()
             {
-                console.log(fl.maxDuration)
                 if (seeker)
                     seeker.value = fl.progress;
                 if (status)
